@@ -1,0 +1,3 @@
+# Make Connection Port selection optional and stable
+
+Each Connection endpoint may carry an optional `portId`. Without one, the router deterministically chooses a suitable footprint side; with one, the named port is a hard endpoint constraint. Starter assets provide `front`, `right`, `back`, and `left` ports in asset-local coordinates so they rotate with the Node, while custom assets may define arbitrary semantic ports. Multiple Connections can share a port through stable separated lanes. Missing referenced ports produce structured diagnostics instead of silent reassignment, and assets declaring no ports receive derived footprint-side ports.

@@ -1,0 +1,3 @@
+# Use TypeScript 7 with API-independent library builds
+
+TypeScript 7 is the project's compiler and language-service baseline. Library packages build with `tsdown` and enable `isolatedDeclarations`, allowing declaration generation through its Oxc path instead of relying on the compiler API that TypeScript 7.0 does not expose. If a third-party development tool still requires the legacy compiler API, the repository may install the official TypeScript 6 compatibility package side by side; that compatibility dependency does not replace TypeScript 7 for project type-checking. Vite 8 provides the playground and Editor development environment.

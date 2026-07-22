@@ -1,0 +1,3 @@
+# Build a deterministic orthogonal router in core
+
+`packages/core` implements routing without an external layout or routing-engine dependency. It builds a sparse orthogonal graph from obstacle boundaries, Connection Ports, and immutable Route Anchors, then uses weighted A* with explicit costs for distance, bends, route crossings, and lane placement. Stable input ordering and tie-breaking make identical inputs produce identical routes, while constrained segments recalculate independently and surface Route Conflicts instead of moving anchors. The MVP uses straightforward obstacle queries within its 200-Node envelope; a spatial index may follow profiling but cannot alter deterministic route identity.

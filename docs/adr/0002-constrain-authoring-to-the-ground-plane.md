@@ -1,0 +1,3 @@
+# Constrain authoring to the ground plane
+
+Nodes and Groups are authored with continuous X/Z coordinates on a Ground Plane even though the Visualization is rendered in true 3D. Grid snapping is an editor aid rather than a restriction of the saved data, and Node footprints prevent overlapping placement. Isometric and top modes share the same positions and Connection Routes; only the camera and label presentation change. The component derives vertical placement from each 3D Asset and its supporting surface, keeping both modes consistent and avoiding the interaction complexity of a general-purpose 3D editor. Explicit elevation or stacking can be added later without making free XYZ placement the default.

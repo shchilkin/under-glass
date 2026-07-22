@@ -1,0 +1,3 @@
+# Use a small framework-neutral controller store
+
+The headless engine exposes a small controller/store contract based on snapshot reads, subscriptions, and Operation dispatch instead of depending on Redux, Zustand, or React state management. The host-owned Visualization is the only persisted state, while hover, drag previews, focus, and other incomplete interactions remain transient controller state. React adapters subscribe with `useSyncExternalStore`; completed gestures emit one Operation and the resulting Visualization to the host. This keeps framework adapters thin and prevents a second authoritative copy of project data from forming inside the Editor.

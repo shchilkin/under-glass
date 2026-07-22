@@ -1,0 +1,3 @@
+# Route connections on the ground plane
+
+Connections follow orthogonal routes across the Ground Plane and use short entry segments at their Nodes instead of spanning freely through 3D space. Node footprints and Group Bounds are hard routing obstacles, while other Connection Routes are soft obstacles: the router penalizes them but may cross them when an alternative would be unreasonable. Crossings use deterministic 3D overpasses for legibility. Grounded routes remain readable from both isometric and top views and reinforce the physical-system character of the Visualization at the cost of requiring a dedicated routing model.

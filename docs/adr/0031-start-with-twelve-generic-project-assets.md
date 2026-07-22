@@ -1,0 +1,3 @@
+# Start with twelve generic project assets
+
+The first optional starter pack contains `user`, `browser`, `mobile-device`, `service`, `gateway`, `server`, `worker`, `database`, `cache`, `queue`, `object-storage`, and `external-system`. Together they cover actors, clients, entry points, compute, asynchronous work, data, messaging, and external dependencies without imposing a provider taxonomy. Networks, clusters, environments, and bounded contexts remain Groups. Monitoring, identity, repository, function, and more specialized storage or compute variants wait until real scenes reveal which distinctions deserve separate assets.

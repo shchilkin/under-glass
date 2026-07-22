@@ -1,0 +1,3 @@
+# Test the engine with Vitest and browser boundaries with Playwright
+
+Vitest owns fast deterministic tests for the runtime-neutral engine, including schema validation and migration, Operations, undo/redo, placement, collision, and routing. Playwright owns behavior that only becomes real at a browser boundary: WebGL rendering, pointer and keyboard interaction, semantic accessibility synchronization, the custom element, the React adapter, image export, and selected visual fixtures. Chromium is the required rendering baseline because the Poster CLI also pins Chromium; other supported browsers receive focused compatibility smoke tests rather than duplicating the full rendering suite.

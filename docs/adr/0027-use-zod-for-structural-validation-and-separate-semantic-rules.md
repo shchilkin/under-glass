@@ -1,0 +1,3 @@
+# Use Zod for structural validation and separate semantic rules
+
+Zod 4 is the source of truth for persisted Visualization types and runtime structural validation. The project generates and publishes standard JSON Schema from those schemas, so persisted schemas must remain faithfully representable: they do not use transforms, non-JSON values, or opaque refinements. Invariants requiring graph context, asset resolution, or relationships between records belong to a separate semantic validation pass with structured diagnostics. Version migrations are explicit pure `vN` to `vN+1` functions, validate their boundaries, and never silently repair invalid documents.
