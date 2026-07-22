@@ -1,4 +1,4 @@
-# Project Visualization
+# Under Glass
 
 This context describes interactive three-dimensional visualizations of software projects and the elements shown within them.
 

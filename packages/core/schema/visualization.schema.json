@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "number", "const": 1 },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "assetId": { "type": "string", "minLength": 1 },
+          "position": {
+            "type": "object",
+            "properties": {
+              "x": { "type": "number" },
+              "z": { "type": "number" }
+            },
+            "required": ["x", "z"],
+            "additionalProperties": false
+          },
+          "quarterTurns": {
+            "anyOf": [
+              { "type": "number", "const": 0 },
+              { "type": "number", "const": 1 },
+              { "type": "number", "const": 2 },
+              { "type": "number", "const": 3 }
+            ]
+          },
+          "groupId": { "type": "string", "minLength": 1 },
+          "styleKey": { "type": "string", "minLength": 1 },
+          "metadata": {
+            "type": "object",
+            "propertyNames": { "type": "string" },
+            "additionalProperties": { "$ref": "#/$defs/__schema0" }
+          },
+          "sourceReference": {
+            "type": "object",
+            "properties": {
+              "sourceId": { "type": "string", "minLength": 1 },
+              "entityId": { "type": "string", "minLength": 1 },
+              "viewId": { "type": "string", "minLength": 1 }
+            },
+            "required": ["sourceId", "entityId"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "label", "assetId", "position", "quarterTurns"],
+        "additionalProperties": false
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "bounds": {
+            "type": "object",
+            "properties": {
+              "minX": { "type": "number" },
+              "minZ": { "type": "number" },
+              "maxX": { "type": "number" },
+              "maxZ": { "type": "number" }
+            },
+            "required": ["minX", "minZ", "maxX", "maxZ"],
+            "additionalProperties": false
+          },
+          "styleKey": { "type": "string", "minLength": 1 },
+          "metadata": {
+            "type": "object",
+            "propertyNames": { "type": "string" },
+            "additionalProperties": { "$ref": "#/$defs/__schema0" }
+          },
+          "sourceReference": {
+            "type": "object",
+            "properties": {
+              "sourceId": { "type": "string", "minLength": 1 },
+              "entityId": { "type": "string", "minLength": 1 },
+              "viewId": { "type": "string", "minLength": 1 }
+            },
+            "required": ["sourceId", "entityId"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "bounds"],
+        "additionalProperties": false
+      }
+    },
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "source": {
+            "type": "object",
+            "properties": {
+              "nodeId": { "type": "string", "minLength": 1 },
+              "portId": { "type": "string", "minLength": 1 }
+            },
+            "required": ["nodeId"],
+            "additionalProperties": false
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "nodeId": { "type": "string", "minLength": 1 },
+              "portId": { "type": "string", "minLength": 1 }
+            },
+            "required": ["nodeId"],
+            "additionalProperties": false
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["undirected", "oneWay", "bidirectional"]
+          },
+          "routeAnchors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "position": {
+                  "type": "object",
+                  "properties": {
+                    "x": { "type": "number" },
+                    "z": { "type": "number" }
+                  },
+                  "required": ["x", "z"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["id", "position"],
+              "additionalProperties": false
+            }
+          },
+          "styleKey": { "type": "string", "minLength": 1 },
+          "metadata": {
+            "type": "object",
+            "propertyNames": { "type": "string" },
+            "additionalProperties": { "$ref": "#/$defs/__schema0" }
+          },
+          "sourceReference": {
+            "type": "object",
+            "properties": {
+              "sourceId": { "type": "string", "minLength": 1 },
+              "entityId": { "type": "string", "minLength": 1 },
+              "viewId": { "type": "string", "minLength": 1 }
+            },
+            "required": ["sourceId", "entityId"],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "source",
+          "target",
+          "direction",
+          "routeAnchors"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "openingView": {
+      "type": "object",
+      "properties": {
+        "cameraMode": { "type": "string", "enum": ["isometric", "top"] },
+        "quarterTurns": {
+          "anyOf": [
+            { "type": "number", "const": 0 },
+            { "type": "number", "const": 1 },
+            { "type": "number", "const": 2 },
+            { "type": "number", "const": 3 }
+          ]
+        },
+        "center": {
+          "type": "object",
+          "properties": {
+            "x": { "type": "number" },
+            "z": { "type": "number" }
+          },
+          "required": ["x", "z"],
+          "additionalProperties": false
+        },
+        "zoom": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["cameraMode", "quarterTurns", "center", "zoom"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "nodes",
+    "groups",
+    "connections",
+    "openingView"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "null" },
+        { "type": "array", "items": { "$ref": "#/$defs/__schema0" } },
+        {
+          "type": "object",
+          "propertyNames": { "type": "string" },
+          "additionalProperties": { "$ref": "#/$defs/__schema0" }
+        }
+      ]
+    }
+  },
+  "$id": "urn:under-glass:schema:visualization:v1",
+  "title": "Under Glass Visualization v1"
+}

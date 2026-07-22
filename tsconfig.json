@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "isolatedDeclarations": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@under-glass/core": ["./packages/core/src/index.ts"],
+      "@under-glass/three": ["./packages/three/src/index.ts"],
+      "@under-glass/web": ["./packages/web/src/index.ts"],
+      "@under-glass/react": ["./packages/react/src/index.ts"],
+      "@under-glass/poster": ["./packages/poster/src/index.ts"],
+      "@under-glass/starter-assets": ["./packages/starter-assets/src/index.ts"]
+    }
+  }
+}

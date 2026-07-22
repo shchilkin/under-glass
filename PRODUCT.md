@@ -1,8 +1,8 @@
-# 3D Project Visualization Component
+# Under Glass
 
 ## Product
 
-An open-source component for authoring and presenting interactive three-dimensional visualizations of projects. A host application owns a generic graph and its meaning; the component owns spatial presentation, editing interactions, deterministic routing, and accessible exploration.
+Under Glass is an open-source component for authoring and presenting interactive three-dimensional visualizations of projects. A host application owns a generic graph and its meaning; the component owns spatial presentation, editing interactions, deterministic routing, and accessible exploration.
 
 The product is not a clone or fork of Isoflow. It uses real glTF/GLB assets, one shared Ground Plane layout, and two canonical camera modes: orthographic isometric and top. Free camera movement and general-purpose XYZ editing are outside the product boundary.
 

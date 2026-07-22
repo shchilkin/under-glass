@@ -1,0 +1,33 @@
+{
+  "name": "@under-glass/core",
+  "version": "0.0.0",
+  "description": "Runtime-neutral document and engine primitives for Under Glass.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./visualization.schema.json": "./schema/visualization.schema.json"
+  },
+  "scripts": {
+    "build": "tsdown && node scripts/generate-schema.mjs",
+    "schema:generate": "tsdown && node scripts/generate-schema.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

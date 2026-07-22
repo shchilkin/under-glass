@@ -1,0 +1,45 @@
+{
+  "name": "under-glass",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "npm@11.13.0",
+  "workspaces": [
+    "packages/core",
+    "packages/three",
+    "packages/web",
+    "packages/react",
+    "packages/poster",
+    "packages/starter-assets",
+    "apps/playground"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "check": "npm run format:check && npm run typecheck && npm run test && npm run build",
+    "dev": "npm run dev --workspace @under-glass/playground",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "schema:generate": "npm run schema:generate --workspace @under-glass/core",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.185.1",
+    "@vitejs/plugin-react": "6.0.4",
+    "prettier": "3.9.6",
+    "tsdown": "0.22.13",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}
