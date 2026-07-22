@@ -16,9 +16,17 @@ _Avoid_: Asset metadata, manifest, model configuration
 A stable opaque identifier through which a host resolves the Asset Definition used by a Node.
 _Avoid_: Asset URL, file path, model ID
 
+**Asset Footprint**:
+The asset-local rectangular X/Z area reserved by a 3D Asset when it is placed on the Ground Plane.
+_Avoid_: Collision box, bounds, hitbox
+
 **Asset Placeholder**:
 The standard geometry shown for a Node when its Asset ID cannot be resolved or its 3D Asset cannot be loaded, preserving the Node's label, footprint, and Connections.
 _Avoid_: Missing model, error cube, fallback icon
+
+**Asset Provenance**:
+The licensing and source information carried by an Asset Definition so that a 3D Asset's origin remains identifiable independently of the code package.
+_Avoid_: Asset metadata, license string
 
 **Visualization**:
 A host-supplied graph that can be rendered and explored as a three-dimensional scene.
@@ -87,3 +95,11 @@ _Avoid_: Group size, bounding box, rectangle
 **Ground Plane**:
 The horizontal X/Z surface on which Nodes and Groups are positioned; vertical placement is derived by the component.
 _Avoid_: Canvas, grid, floor
+
+**Ground Contact**:
+The asset-local point aligned with a Node's position on the Ground Plane after the 3D Asset's scale and normalization rotation are applied.
+_Avoid_: Pivot, origin, Y offset
+
+**Ground Span**:
+The number of Ground Plane units framed across the viewport height by an Opening View, independently of renderer-specific camera zoom values.
+_Avoid_: Zoom, camera scale, magnification
