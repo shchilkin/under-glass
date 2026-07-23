@@ -1,6 +1,12 @@
-import type { Visualization } from "@under-glass/core";
+export { createSceneRenderer } from "./scene-renderer.js";
 
-export interface SceneRenderer {
-  readonly visualization: Visualization;
-  dispose(): void;
-}
+export {
+  type AssetResolver,
+  type CreateSceneRendererOptions,
+  type ResolvedAsset,
+  type SceneRenderer,
+  type SceneRendererDiagnostic,
+  type SceneRendererDiagnosticCode,
+  type SceneRendererSnapshot,
+  type SceneRendererStatus,
+} from "./types.js";
