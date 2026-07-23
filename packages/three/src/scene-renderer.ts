@@ -338,6 +338,25 @@ function completeNodeLoad(
   store.setSnapshot({ diagnostics: [], status: "ready" });
 }
 
+function completePreparedNodeLoad(
+  node: Node,
+  loadedAsset: LoadedNodeAsset | null,
+  surface: RenderingSurface,
+  store: SceneStateStore,
+  isDisposed: () => boolean,
+): void {
+  if (loadedAsset === null) {
+    return;
+  }
+
+  if (isDisposed()) {
+    disposeObjectResources(loadedAsset.asset);
+    return;
+  }
+
+  completeNodeLoad(node, loadedAsset, surface, store);
+}
+
 function nodeLoadDiagnostic(
   node: Node,
   error: unknown,
@@ -376,9 +395,7 @@ async function loadNode(
       isDisposed,
     );
 
-    if (loadedAsset !== null) {
-      completeNodeLoad(node, loadedAsset, surface, store);
-    }
+    completePreparedNodeLoad(node, loadedAsset, surface, store, isDisposed);
   } catch (error) {
     failNodeLoad(node, error, store, isDisposed);
   }
