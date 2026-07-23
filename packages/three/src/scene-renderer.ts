@@ -48,9 +48,17 @@ import {
   updateGroundPlane,
 } from "./scene-layout.js";
 import {
-  applyOpeningView,
+  beginCameraModeTransition,
+  sampleCameraModeTransition,
+  type CameraModeTransition,
+  type PrototypeCameraMotionProfile,
+} from "./camera-mode-transition.js";
+import {
+  applyOpeningViewTransition,
   createOpeningViewCamera,
+  deriveOpeningViewCameraPoses,
   type CameraMode,
+  type OpeningViewCameraPoses,
 } from "./scene-camera.js";
 import {
   createConnectionRoute,
@@ -68,13 +76,20 @@ import type {
 interface RenderingSurface {
   readonly camera: OrthographicCamera;
   readonly canvas: HTMLCanvasElement;
+  animationFrameId: number | null;
   cameraMode: CameraMode;
+  readonly cameraPoses: OpeningViewCameraPoses;
+  cameraProgress: number;
+  cameraTransition: CameraModeTransition | null;
+  cameraVelocity: number;
   readonly connectionLayer: Group;
   readonly container: HTMLElement;
   readonly groundGrid: Group;
   readonly groundPlane: Mesh;
   readonly labels: LabelOverlay;
   readonly openingView: OpeningView;
+  readonly reducedMotion: MediaQueryList;
+  reducedMotionListener: (() => void) | null;
   readonly resizeObserver: ResizeObserver;
   readonly scene: Scene;
   readonly webGlRenderer: WebGLRenderer;
@@ -95,6 +110,14 @@ interface NodeLoadContext {
   readonly options: CreateSceneRendererOptions;
   readonly session: RendererSession;
   readonly surface: RenderingSurface;
+}
+
+function prototypeMotionProfile(
+  container: HTMLElement,
+): PrototypeCameraMotionProfile {
+  const profile = container.dataset.underGlassPrototypeMotionProfile;
+
+  return profile === "responsive" || profile === "spring" ? profile : "smooth";
 }
 
 function addAssetPlaceholders(
@@ -132,6 +155,41 @@ function renderSurface(surface: RenderingSurface): void {
   surface.labels.render(surface.camera);
 }
 
+function applyCurrentCameraPose(
+  surface: RenderingSurface,
+  width: number,
+  height: number,
+): void {
+  applyOpeningViewTransition(
+    surface.camera,
+    surface.openingView,
+    surface.cameraPoses,
+    surface.cameraProgress,
+    width,
+    height,
+  );
+}
+
+function updateGridCoverage(
+  surface: RenderingSurface,
+  width: number,
+  height: number,
+): void {
+  const progress = surface.cameraProgress;
+
+  applyOpeningViewTransition(
+    surface.camera,
+    surface.openingView,
+    surface.cameraPoses,
+    0,
+    width,
+    height,
+  );
+  updateInfiniteGrid(surface.groundGrid, surface.camera);
+  surface.cameraProgress = progress;
+  applyCurrentCameraPose(surface, width, height);
+}
+
 function resizeSurface(
   surface: RenderingSurface,
   container: HTMLElement,
@@ -139,16 +197,105 @@ function resizeSurface(
   const width = Math.max(1, container.clientWidth);
   const height = Math.max(1, container.clientHeight);
 
-  applyOpeningView(
-    surface.camera,
-    surface.openingView,
-    surface.cameraMode,
-    width,
-    height,
-  );
-  updateInfiniteGrid(surface.groundGrid, surface.camera);
   surface.webGlRenderer.setSize(width, height, false);
+  updateGridCoverage(surface, width, height);
   renderSurface(surface);
+}
+
+function renderCurrentCameraPose(surface: RenderingSurface): void {
+  const width = Math.max(1, surface.container.clientWidth);
+  const height = Math.max(1, surface.container.clientHeight);
+
+  applyCurrentCameraPose(surface, width, height);
+  renderSurface(surface);
+}
+
+function stopCameraAnimation(surface: RenderingSurface): void {
+  if (surface.animationFrameId !== null) {
+    cancelAnimationFrame(surface.animationFrameId);
+    surface.animationFrameId = null;
+  }
+}
+
+function finishCameraModeImmediately(
+  surface: RenderingSurface,
+  cameraMode: CameraMode,
+): void {
+  stopCameraAnimation(surface);
+  surface.cameraMode = cameraMode;
+  surface.cameraProgress = cameraMode === "top" ? 1 : 0;
+  surface.cameraTransition = null;
+  surface.cameraVelocity = 0;
+  surface.container.dataset.underGlassCameraMode = cameraMode;
+  surface.container.dataset.underGlassCameraTransition = "idle";
+  renderCurrentCameraPose(surface);
+}
+
+function sampleActiveCameraTransition(
+  surface: RenderingSurface,
+  now: number,
+): boolean {
+  const transition = surface.cameraTransition;
+
+  if (transition === null) {
+    return true;
+  }
+
+  const sample = sampleCameraModeTransition(transition, now);
+  surface.cameraProgress = sample.progress;
+  surface.cameraVelocity = sample.velocity;
+  renderCurrentCameraPose(surface);
+
+  if (sample.complete) {
+    surface.cameraTransition = null;
+    surface.cameraVelocity = 0;
+    surface.animationFrameId = null;
+    surface.container.dataset.underGlassCameraTransition = "idle";
+  }
+
+  return sample.complete;
+}
+
+function animateCameraTransition(surface: RenderingSurface, now: number): void {
+  if (sampleActiveCameraTransition(surface, now)) {
+    return;
+  }
+
+  surface.animationFrameId = requestAnimationFrame((timestamp) => {
+    animateCameraTransition(surface, timestamp);
+  });
+}
+
+function startCameraModeTransition(
+  surface: RenderingSurface,
+  cameraMode: CameraMode,
+): void {
+  const now = performance.now();
+
+  stopCameraAnimation(surface);
+  if (surface.cameraTransition !== null) {
+    sampleActiveCameraTransition(surface, now);
+  }
+
+  surface.cameraMode = cameraMode;
+  surface.container.dataset.underGlassCameraMode = cameraMode;
+  surface.cameraTransition = beginCameraModeTransition({
+    from: surface.cameraProgress,
+    now,
+    profile: prototypeMotionProfile(surface.container),
+    to: cameraMode === "top" ? 1 : 0,
+    velocity: surface.cameraVelocity,
+  });
+
+  if (surface.cameraTransition.duration === 0) {
+    finishCameraModeImmediately(surface, cameraMode);
+    return;
+  }
+
+  surface.container.dataset.underGlassCameraTransition = "moving";
+  surface.animationFrameId = requestAnimationFrame((timestamp) => {
+    animateCameraTransition(surface, timestamp);
+  });
 }
 
 function createRenderingSurface(
@@ -163,6 +310,8 @@ function createRenderingSurface(
   });
   const scene = new Scene();
   const camera = createOpeningViewCamera();
+  const cameraProgress = visualization.openingView.cameraMode === "top" ? 1 : 0;
+  const cameraPoses = deriveOpeningViewCameraPoses(visualization.openingView);
   const center = visualization.openingView.center;
   const groundPlane = createGroundPlane(visualization, new Map());
   const groundGrid = createInfiniteGrid();
@@ -207,17 +356,25 @@ function createRenderingSurface(
   scene.add(fillLight);
 
   container.dataset.underGlassCameraMode = visualization.openingView.cameraMode;
+  container.dataset.underGlassCameraTransition = "idle";
 
   const surface: RenderingSurface = {
+    animationFrameId: null,
     camera,
     canvas,
     cameraMode: visualization.openingView.cameraMode,
+    cameraPoses,
+    cameraProgress,
+    cameraTransition: null,
+    cameraVelocity: 0,
     connectionLayer,
     container,
     groundGrid,
     groundPlane,
     labels,
     openingView: visualization.openingView,
+    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)"),
+    reducedMotionListener: null,
     resizeObserver: new ResizeObserver(() => {
       resizeSurface(surface, container);
     }),
@@ -225,6 +382,15 @@ function createRenderingSurface(
     webGlRenderer,
   };
 
+  surface.reducedMotionListener = () => {
+    if (surface.reducedMotion.matches) {
+      finishCameraModeImmediately(surface, surface.cameraMode);
+    }
+  };
+  surface.reducedMotion.addEventListener(
+    "change",
+    surface.reducedMotionListener,
+  );
   surface.resizeObserver.observe(container);
   resizeSurface(surface, container);
   return surface;
@@ -379,6 +545,13 @@ function disposeSurface(
   surface: RenderingSurface,
   assetRoots: Iterable<Object3D>,
 ): void {
+  stopCameraAnimation(surface);
+  if (surface.reducedMotionListener !== null) {
+    surface.reducedMotion.removeEventListener(
+      "change",
+      surface.reducedMotionListener,
+    );
+  }
   surface.resizeObserver.disconnect();
   surface.labels.dispose();
   disposeObjectResourceRoots([surface.scene, ...assetRoots]);
@@ -540,16 +713,26 @@ function createSceneRendererHandle(
       disposeRendererSession(store, session);
     },
     getSnapshot: store.getSnapshot,
-    setCameraMode(cameraMode: CameraMode): void {
+    setCameraMode(cameraMode: CameraMode, options): void {
       const surface = session.surface;
 
       if (session.disposed || surface === null) {
         return;
       }
 
-      surface.cameraMode = cameraMode;
-      surface.container.dataset.underGlassCameraMode = cameraMode;
-      resizeSurface(surface, surface.container);
+      const shouldApplyImmediately =
+        options?.transition === "immediate" || surface.reducedMotion.matches;
+
+      if (shouldApplyImmediately) {
+        finishCameraModeImmediately(surface, cameraMode);
+        return;
+      }
+
+      if (surface.cameraMode === cameraMode) {
+        return;
+      }
+
+      startCameraModeTransition(surface, cameraMode);
     },
     subscribe: store.subscribe,
   };

@@ -5,7 +5,9 @@ import type { OpeningView } from "@under-glass/core";
 
 import {
   applyOpeningView,
+  applyOpeningViewTransition,
   createOpeningViewCamera,
+  deriveOpeningViewCameraPoses,
   deriveViewportGroundBounds,
 } from "./scene-camera.js";
 
@@ -49,6 +51,43 @@ describe("Opening View camera", () => {
     expect(camera.position.z).toBeCloseTo(-2, 6);
     expect(camera.up.x).toBeCloseTo(-1, 6);
     expect(camera.up.z).toBeCloseTo(0, 6);
+  });
+
+  it("orbits between the exact canonical poses without changing center or radius", () => {
+    const poses = deriveOpeningViewCameraPoses(openingView);
+    const animated = createOpeningViewCamera();
+    const canonical = createOpeningViewCamera();
+
+    for (const [progress, mode] of [
+      [0, "isometric"],
+      [1, "top"],
+    ] as const) {
+      applyOpeningViewTransition(
+        animated,
+        openingView,
+        poses,
+        progress,
+        900,
+        600,
+      );
+      applyOpeningView(canonical, openingView, mode, 900, 600);
+
+      expect(animated.position.distanceTo(canonical.position)).toBeCloseTo(
+        0,
+        8,
+      );
+      expect(animated.quaternion.angleTo(canonical.quaternion)).toBeCloseTo(
+        0,
+        6,
+      );
+    }
+
+    applyOpeningViewTransition(animated, openingView, poses, 0.5, 900, 600);
+    expect(animated.position.distanceTo(new Vector3(3, 0, -2))).toBeCloseTo(
+      40,
+      8,
+    );
+    expect(animated.top - animated.bottom).toBe(12);
   });
 
   it("derives an edge-free ground grid extent from the current frustum", () => {

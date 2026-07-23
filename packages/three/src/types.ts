@@ -39,9 +39,16 @@ export interface CreateSceneRendererOptions {
   readonly visualization: Visualization;
 }
 
+export interface SetCameraModeOptions {
+  readonly transition?: "auto" | "immediate";
+}
+
 export interface SceneRenderer {
   dispose(): void;
   getSnapshot(): SceneRendererSnapshot;
-  setCameraMode(cameraMode: OpeningView["cameraMode"]): void;
+  setCameraMode(
+    cameraMode: OpeningView["cameraMode"],
+    options?: SetCameraModeOptions,
+  ): void;
   subscribe(listener: () => void): () => void;
 }

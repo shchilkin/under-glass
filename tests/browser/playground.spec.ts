@@ -237,8 +237,126 @@ test("renders the canonical project graph in both camera modes", async ({
 
   await expect(top).toHaveAttribute("aria-pressed", "true");
   await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
   await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
   const topPixels = await canvas.screenshot();
 
   expect(topPixels.equals(isometricPixels)).toBe(false);
+});
+
+test("retargets an active Camera Mode Transition to the latest requested mode", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=graph&motion=smooth");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  const isometric = page.getByRole("button", {
+    name: "Isometric",
+    exact: true,
+  });
+  const top = page.getByRole("button", { name: "Top", exact: true });
+
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-prototype-motion-profile",
+    "smooth",
+  );
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
+
+  await top.click();
+  await expect(top).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "moving",
+  );
+
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "moving",
+  );
+
+  await page.waitForTimeout(120);
+  await isometric.click();
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-mode",
+    "isometric",
+  );
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "moving",
+  );
+
+  await page.waitForTimeout(40);
+  await top.click();
+  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+    { timeout: 2_000 },
+  );
+});
+
+test("applies Camera Mode changes immediately when reduced motion is requested", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/?scenario=graph&motion=spring");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
+});
+
+test("compares prototype motion profiles without recreating the scene", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=graph&motion=spring");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  const spring = page.getByRole("button", { name: "Spring", exact: true });
+  const responsive = page.getByRole("button", {
+    name: "Responsive",
+    exact: true,
+  });
+
+  await expect(spring).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-prototype-motion-profile",
+    "spring",
+  );
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
+
+  await responsive.click();
+
+  await expect(responsive).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-prototype-motion-profile",
+    "responsive",
+  );
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("motion"))
+    .toBe("responsive");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
 });

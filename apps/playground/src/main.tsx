@@ -20,8 +20,41 @@ import { PROJECT_GRAPH_VISUALIZATION } from "./project-graph-fixture.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
+type PrototypeCameraMotionProfile = "responsive" | "smooth" | "spring";
 const showConnection = searchParameters.has("connections");
 const scenario = searchParameters.get("scenario") ?? "single";
+const MOTION_PROFILES: readonly PrototypeCameraMotionProfile[] = [
+  "smooth",
+  "responsive",
+  "spring",
+];
+const requestedMotionProfile = searchParameters.get("motion");
+const initialMotionProfile: PrototypeCameraMotionProfile =
+  requestedMotionProfile !== null &&
+  MOTION_PROFILES.includes(
+    requestedMotionProfile as PrototypeCameraMotionProfile,
+  )
+    ? (requestedMotionProfile as PrototypeCameraMotionProfile)
+    : "smooth";
+const MOTION_PROFILE_COPY: Readonly<
+  Record<
+    PrototypeCameraMotionProfile,
+    { readonly description: string; readonly label: string }
+  >
+> = {
+  responsive: {
+    description: "440 ms · strong ease-out",
+    label: "Responsive",
+  },
+  smooth: {
+    description: "550 ms · symmetric ease-in-out",
+    label: "Smooth",
+  },
+  spring: {
+    description: "650 ms · 3.5% overshoot",
+    label: "Spring",
+  },
+};
 
 function recoverableScenarioNodes(failure: string): Node[] {
   return [
@@ -231,6 +264,8 @@ function App() {
   const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
     demoVisualization.openingView.cameraMode,
   );
+  const [motionProfile, setMotionProfile] =
+    useState<PrototypeCameraMotionProfile>(initialMotionProfile);
   const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([]);
   const [assetResolveCount, setAssetResolveCount] = useState(0);
 
@@ -270,6 +305,25 @@ function App() {
     rendererRef.current?.setCameraMode(cameraMode);
   }, [cameraMode]);
 
+  useEffect(() => {
+    if (sceneContainerRef.current !== null) {
+      sceneContainerRef.current.dataset.underGlassPrototypeMotionProfile =
+        motionProfile;
+    }
+  }, [motionProfile]);
+
+  const selectMotionProfile = (profile: PrototypeCameraMotionProfile): void => {
+    const nextSearchParameters = new URLSearchParams(window.location.search);
+
+    nextSearchParameters.set("motion", profile);
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}?${nextSearchParameters.toString()}`,
+    );
+    setMotionProfile(profile);
+  };
+
   return (
     <main className={scenario === "graph" ? "app app--graph" : "app"}>
       <p className="eyebrow">Open-source project visualization</p>
@@ -279,21 +333,42 @@ function App() {
           ? "A host-resolved project system crossing the public renderer boundary."
           : "A host-resolved GLB crossing the public renderer boundary."}
       </p>
-      <div aria-label="Camera mode" className="camera-mode">
-        <button
-          aria-pressed={cameraMode === "isometric"}
-          onClick={() => setCameraMode("isometric")}
-          type="button"
-        >
-          Isometric
-        </button>
-        <button
-          aria-pressed={cameraMode === "top"}
-          onClick={() => setCameraMode("top")}
-          type="button"
-        >
-          Top
-        </button>
+      <div className="scene-controls">
+        <div className="motion-lab">
+          <span className="control-label">Motion prototype</span>
+          <div aria-label="Camera motion profile" className="motion-profile">
+            {MOTION_PROFILES.map((profile) => (
+              <button
+                aria-label={MOTION_PROFILE_COPY[profile].label}
+                aria-pressed={motionProfile === profile}
+                key={profile}
+                onClick={() => selectMotionProfile(profile)}
+                type="button"
+              >
+                {MOTION_PROFILE_COPY[profile].label}
+              </button>
+            ))}
+          </div>
+          <span className="motion-description">
+            {MOTION_PROFILE_COPY[motionProfile].description}
+          </span>
+        </div>
+        <div aria-label="Camera mode" className="camera-mode">
+          <button
+            aria-pressed={cameraMode === "isometric"}
+            onClick={() => setCameraMode("isometric")}
+            type="button"
+          >
+            Isometric
+          </button>
+          <button
+            aria-pressed={cameraMode === "top"}
+            onClick={() => setCameraMode("top")}
+            type="button"
+          >
+            Top
+          </button>
+        </div>
       </div>
       <div
         aria-label="Under Glass 3D scene"
