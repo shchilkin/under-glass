@@ -3,6 +3,7 @@ import {
   Color,
   DirectionalLight,
   Group,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
@@ -45,12 +46,10 @@ interface GroundPlaneBounds {
 
 const GROUND_PLANE_PADDING = 2;
 
-function deriveGroundPlaneBounds(
+function createNodePlacementMatrix(
   node: Node,
   definition: AssetDefinition,
-): GroundPlaneBounds {
-  const footprint = definition.footprint;
-  const groundContact = definition.groundContact;
+): Matrix4 {
   const rotation = definition.normalizationRotation;
   const normalizationRotation = new Quaternion(
     rotation.x,
@@ -62,7 +61,34 @@ function deriveGroundPlaneBounds(
     new Vector3(0, 1, 0),
     node.quarterTurns * (Math.PI / 2),
   );
-  const worldRotation = nodeRotation.multiply(normalizationRotation);
+  const scale = new Vector3(
+    definition.scale,
+    definition.scale,
+    definition.scale,
+  );
+  const worldTransform = new Matrix4().compose(
+    new Vector3(node.position.x, 0, node.position.z),
+    nodeRotation.multiply(normalizationRotation),
+    scale,
+  );
+  const groundContact = definition.groundContact;
+
+  return worldTransform.multiply(
+    new Matrix4().makeTranslation(
+      -groundContact.x,
+      -groundContact.y,
+      -groundContact.z,
+    ),
+  );
+}
+
+function deriveGroundPlaneBounds(
+  node: Node,
+  definition: AssetDefinition,
+): GroundPlaneBounds {
+  const footprint = definition.footprint;
+  const groundContact = definition.groundContact;
+  const placementMatrix = createNodePlacementMatrix(node, definition);
   const footprintCorners: ReadonlyArray<readonly [number, number]> = [
     [footprint.minX, footprint.minZ],
     [footprint.minX, footprint.maxZ],
@@ -70,10 +96,7 @@ function deriveGroundPlaneBounds(
     [footprint.maxX, footprint.maxZ],
   ];
   const worldCorners = footprintCorners.map(([x, z]) =>
-    new Vector3(x - groundContact.x, 0, z - groundContact.z)
-      .multiplyScalar(definition.scale)
-      .applyQuaternion(worldRotation)
-      .add(new Vector3(node.position.x, 0, node.position.z)),
+    new Vector3(x, groundContact.y, z).applyMatrix4(placementMatrix),
   );
   const xCoordinates = worldCorners.map((corner) => corner.x);
   const zCoordinates = worldCorners.map((corner) => corner.z);
@@ -178,22 +201,11 @@ function createPlacedAsset(
   asset: Object3D,
 ): Object3D {
   const placement = new Group();
-  const normalization = new Group();
-  const rotation = definition.normalizationRotation;
-  const groundContact = definition.groundContact;
 
   placement.name = `Node ${node.id}`;
-  placement.position.set(node.position.x, 0, node.position.z);
-  placement.rotation.y = node.quarterTurns * (Math.PI / 2);
-
-  normalization.quaternion.copy(
-    new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w).normalize(),
-  );
-  normalization.scale.setScalar(definition.scale);
-
-  asset.position.set(-groundContact.x, -groundContact.y, -groundContact.z);
-  normalization.add(asset);
-  placement.add(normalization);
+  placement.matrixAutoUpdate = false;
+  placement.matrix.copy(createNodePlacementMatrix(node, definition));
+  placement.add(asset);
   return placement;
 }
 
