@@ -1,13 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const isCI = Boolean(process.env.CI);
+
 export default defineConfig({
-  failOnFlakyTests: Boolean(process.env.CI),
-  forbidOnly: Boolean(process.env.CI),
+  failOnFlakyTests: isCI,
+  forbidOnly: isCI,
   fullyParallel: false,
-  reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "list",
-  retries: process.env.CI ? 1 : 0,
+  reporter: isCI ? [["line"], ["html", { open: "never" }]] : "list",
+  retries: isCI ? 1 : 0,
   testDir: "./tests/browser",
-  workers: process.env.CI ? 1 : undefined,
+  workers: isCI ? 1 : undefined,
   projects: [
     {
       name: "chromium",
@@ -23,7 +25,7 @@ export default defineConfig({
   webServer: {
     command:
       "npm run dev --workspace @under-glass/playground -- --host 127.0.0.1 --port 4175",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !isCI,
     url: "http://127.0.0.1:4175",
   },
 });
