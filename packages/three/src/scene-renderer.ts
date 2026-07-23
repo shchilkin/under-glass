@@ -37,6 +37,34 @@ interface RenderingSurface {
   readonly webGlRenderer: WebGLRenderer;
 }
 
+interface RendererSession {
+  disposed: boolean;
+  surface: RenderingSurface | null;
+}
+
+interface LoadedNodeAsset {
+  readonly asset: Object3D;
+  readonly resolvedAsset: ResolvedAsset;
+}
+
+type RenderableNodeResult =
+  | {
+      readonly diagnostic: SceneRendererDiagnostic;
+    }
+  | {
+      readonly node: Node;
+    };
+
+class SceneRendererDiagnosticError extends Error {
+  readonly diagnostic: SceneRendererDiagnostic;
+
+  constructor(diagnostic: SceneRendererDiagnostic) {
+    super(diagnostic.message);
+    this.name = "SceneRendererDiagnosticError";
+    this.diagnostic = diagnostic;
+  }
+}
+
 interface GroundPlaneBounds {
   readonly centerX: number;
   readonly centerZ: number;
@@ -252,6 +280,87 @@ function failedAssetDiagnostic(
   };
 }
 
+async function resolveNodeAsset(
+  node: Node,
+  options: CreateSceneRendererOptions,
+): Promise<ResolvedAsset> {
+  const resolvedAsset = await options.resolveAsset(node.assetId);
+  const validationDiagnostic = validateResolvedAsset(
+    node.assetId,
+    resolvedAsset,
+  );
+
+  if (validationDiagnostic !== null) {
+    throw new SceneRendererDiagnosticError(validationDiagnostic);
+  }
+
+  return resolvedAsset;
+}
+
+async function prepareNodeAsset(
+  node: Node,
+  options: CreateSceneRendererOptions,
+  surface: RenderingSurface,
+  isDisposed: () => boolean,
+): Promise<LoadedNodeAsset | null> {
+  const resolvedAsset = await resolveNodeAsset(node, options);
+
+  if (isDisposed()) {
+    return null;
+  }
+
+  surface.scene.add(createGroundPlane(node, resolvedAsset.definition));
+  renderSurface(surface);
+  const asset = await parseGlb(resolvedAsset.bytes);
+
+  if (isDisposed()) {
+    disposeObjectResources(asset);
+    return null;
+  }
+
+  return { asset, resolvedAsset };
+}
+
+function completeNodeLoad(
+  node: Node,
+  loadedAsset: LoadedNodeAsset,
+  surface: RenderingSurface,
+  store: SceneStateStore,
+): void {
+  surface.scene.add(
+    createPlacedAsset(
+      node,
+      loadedAsset.resolvedAsset.definition,
+      loadedAsset.asset,
+    ),
+  );
+  renderSurface(surface);
+  store.setSnapshot({ diagnostics: [], status: "ready" });
+}
+
+function nodeLoadDiagnostic(
+  node: Node,
+  error: unknown,
+): SceneRendererDiagnostic {
+  return error instanceof SceneRendererDiagnosticError
+    ? error.diagnostic
+    : failedAssetDiagnostic(node, error);
+}
+
+function failNodeLoad(
+  node: Node,
+  error: unknown,
+  store: SceneStateStore,
+  isDisposed: () => boolean,
+): void {
+  if (!isDisposed()) {
+    store.setSnapshot({
+      diagnostics: [nodeLoadDiagnostic(node, error)],
+      status: "failed",
+    });
+  }
+}
+
 async function loadNode(
   node: Node,
   options: CreateSceneRendererOptions,
@@ -260,44 +369,18 @@ async function loadNode(
   isDisposed: () => boolean,
 ): Promise<void> {
   try {
-    const resolvedAsset = await options.resolveAsset(node.assetId);
-
-    if (isDisposed()) {
-      return;
-    }
-
-    const validationDiagnostic = validateResolvedAsset(
-      node.assetId,
-      resolvedAsset,
+    const loadedAsset = await prepareNodeAsset(
+      node,
+      options,
+      surface,
+      isDisposed,
     );
 
-    if (validationDiagnostic !== null) {
-      store.setSnapshot({
-        diagnostics: [validationDiagnostic],
-        status: "failed",
-      });
-      return;
+    if (loadedAsset !== null) {
+      completeNodeLoad(node, loadedAsset, surface, store);
     }
-
-    surface.scene.add(createGroundPlane(node, resolvedAsset.definition));
-    renderSurface(surface);
-    const asset = await parseGlb(resolvedAsset.bytes);
-
-    if (isDisposed()) {
-      disposeObjectResources(asset);
-      return;
-    }
-
-    surface.scene.add(createPlacedAsset(node, resolvedAsset.definition, asset));
-    renderSurface(surface);
-    store.setSnapshot({ diagnostics: [], status: "ready" });
   } catch (error) {
-    if (!isDisposed()) {
-      store.setSnapshot({
-        diagnostics: [failedAssetDiagnostic(node, error)],
-        status: "failed",
-      });
-    }
+    failNodeLoad(node, error, store, isDisposed);
   }
 }
 
@@ -357,58 +440,101 @@ function deferFailedLifecycle(
   });
 }
 
-export function createSceneRenderer(
-  options: CreateSceneRendererOptions,
-): SceneRenderer {
-  const store = createSceneStateStore();
-  let disposed = false;
-  let surface: RenderingSurface | null = null;
-  const [node] = options.visualization.nodes;
+function findRenderableNode(
+  visualization: Visualization,
+): RenderableNodeResult {
+  const [node] = visualization.nodes;
 
-  if (node === undefined || options.visualization.nodes.length !== 1) {
-    deferFailedLifecycle(
-      store,
-      unsupportedNodeCountDiagnostic(options.visualization.nodes.length),
-      () => disposed,
-    );
-  } else if (options.visualization.connections.length > 0) {
-    deferFailedLifecycle(
-      store,
-      unsupportedConnectionsDiagnostic(
-        options.visualization.connections.length,
-      ),
-      () => disposed,
-    );
-  } else {
-    try {
-      surface = createRenderingSurface(
-        options.container,
-        options.visualization,
-      );
-      void loadNode(node, options, surface, store, () => disposed);
-    } catch (error) {
-      deferFailedLifecycle(
-        store,
-        rendererUnavailableDiagnostic(error),
-        () => disposed,
-      );
-    }
+  if (node === undefined || visualization.nodes.length !== 1) {
+    return {
+      diagnostic: unsupportedNodeCountDiagnostic(visualization.nodes.length),
+    };
   }
 
+  if (visualization.connections.length > 0) {
+    return {
+      diagnostic: unsupportedConnectionsDiagnostic(
+        visualization.connections.length,
+      ),
+    };
+  }
+
+  return { node };
+}
+
+function startSceneRendering(
+  options: CreateSceneRendererOptions,
+  store: SceneStateStore,
+  session: RendererSession,
+): RenderingSurface | null {
+  const renderableNode = findRenderableNode(options.visualization);
+
+  if ("diagnostic" in renderableNode) {
+    deferFailedLifecycle(
+      store,
+      renderableNode.diagnostic,
+      () => session.disposed,
+    );
+    return null;
+  }
+
+  try {
+    const surface = createRenderingSurface(
+      options.container,
+      options.visualization,
+    );
+    void loadNode(renderableNode.node, options, surface, store, () => {
+      return session.disposed;
+    });
+    return surface;
+  } catch (error) {
+    deferFailedLifecycle(
+      store,
+      rendererUnavailableDiagnostic(error),
+      () => session.disposed,
+    );
+    return null;
+  }
+}
+
+function disposeRendererSession(
+  store: SceneStateStore,
+  session: RendererSession,
+): void {
+  if (session.disposed) {
+    return;
+  }
+
+  session.disposed = true;
+  store.dispose();
+
+  if (session.surface !== null) {
+    disposeSurface(session.surface);
+  }
+}
+
+function createSceneRendererHandle(
+  store: SceneStateStore,
+  session: RendererSession,
+): SceneRenderer {
   return {
     dispose(): void {
-      if (disposed) {
-        return;
-      }
-
-      disposed = true;
-      store.dispose();
-
-      if (surface !== null) {
-        disposeSurface(surface);
-      }
+      disposeRendererSession(store, session);
     },
     getSnapshot: store.getSnapshot,
     subscribe: store.subscribe,
   };
+}
+
+export function createSceneRenderer(
+  options: CreateSceneRendererOptions,
+): SceneRenderer {
+  const store = createSceneStateStore();
+  const session: RendererSession = {
+    disposed: false,
+    surface: null,
+  };
+
+  session.surface = startSceneRendering(options, store, session);
+  return createSceneRendererHandle(store, session);
 }

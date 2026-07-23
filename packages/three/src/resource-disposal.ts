@@ -8,6 +8,13 @@ import {
   Texture,
 } from "three";
 
+interface DisposalRegistry {
+  readonly geometries: Set<BufferGeometry>;
+  readonly materials: Set<Material>;
+  readonly skeletons: Set<Skeleton>;
+  readonly textures: Set<Texture>;
+}
+
 function disposeMaterialTextures(
   material: Material,
   disposedTextures: Set<Texture>,
@@ -20,43 +27,68 @@ function disposeMaterialTextures(
   }
 }
 
+function disposeSkeleton(
+  object: Object3D,
+  disposedSkeletons: Set<Skeleton>,
+): void {
+  if (
+    object instanceof SkinnedMesh &&
+    !disposedSkeletons.has(object.skeleton)
+  ) {
+    disposedSkeletons.add(object.skeleton);
+    object.skeleton.dispose();
+  }
+}
+
+function disposeGeometry(
+  mesh: Mesh,
+  disposedGeometries: Set<BufferGeometry>,
+): void {
+  if (!disposedGeometries.has(mesh.geometry)) {
+    disposedGeometries.add(mesh.geometry);
+    mesh.geometry.dispose();
+  }
+}
+
+function disposeMaterials(mesh: Mesh, registry: DisposalRegistry): void {
+  const materials = Array.isArray(mesh.material)
+    ? mesh.material
+    : [mesh.material];
+
+  for (const material of materials) {
+    if (registry.materials.has(material)) {
+      continue;
+    }
+
+    registry.materials.add(material);
+    disposeMaterialTextures(material, registry.textures);
+    material.dispose();
+  }
+}
+
+function disposeObjectResource(
+  object: Object3D,
+  registry: DisposalRegistry,
+): void {
+  disposeSkeleton(object, registry.skeletons);
+
+  if (!(object instanceof Mesh)) {
+    return;
+  }
+
+  disposeGeometry(object, registry.geometries);
+  disposeMaterials(object, registry);
+}
+
 export function disposeObjectResources(root: Object3D): void {
-  const disposedGeometries = new Set<BufferGeometry>();
-  const disposedMaterials = new Set<Material>();
-  const disposedSkeletons = new Set<Skeleton>();
-  const disposedTextures = new Set<Texture>();
+  const registry: DisposalRegistry = {
+    geometries: new Set(),
+    materials: new Set(),
+    skeletons: new Set(),
+    textures: new Set(),
+  };
 
   root.traverse((object) => {
-    if (
-      object instanceof SkinnedMesh &&
-      !disposedSkeletons.has(object.skeleton)
-    ) {
-      disposedSkeletons.add(object.skeleton);
-      object.skeleton.dispose();
-    }
-
-    if (!(object instanceof Mesh)) {
-      return;
-    }
-
-    const geometry = object.geometry;
-    const materials = Array.isArray(object.material)
-      ? object.material
-      : [object.material];
-
-    if (geometry !== undefined && !disposedGeometries.has(geometry)) {
-      disposedGeometries.add(geometry);
-      geometry.dispose();
-    }
-
-    for (const material of materials) {
-      if (!(material instanceof Material) || disposedMaterials.has(material)) {
-        continue;
-      }
-
-      disposedMaterials.add(material);
-      disposeMaterialTextures(material, disposedTextures);
-      material.dispose();
-    }
+    disposeObjectResource(object, registry);
   });
 }
