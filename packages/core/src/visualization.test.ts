@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseVisualization } from "./index.js";
+import { parseVisualization, safeParseVisualization } from "./index.js";
 
 describe("parseVisualization", () => {
   it("accepts the smallest valid version 1 Visualization", () => {
@@ -13,7 +13,7 @@ describe("parseVisualization", () => {
         cameraMode: "isometric",
         quarterTurns: 0,
         center: { x: 0, z: 0 },
-        zoom: 1,
+        groundSpan: 12,
       },
     };
 
@@ -31,7 +31,7 @@ describe("parseVisualization", () => {
           cameraMode: "top",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
-          zoom: 1,
+          groundSpan: 12,
         },
       }),
     ).toThrow();
@@ -48,7 +48,7 @@ describe("parseVisualization", () => {
           cameraMode: "isometric",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
-          zoom: 1,
+          groundSpan: 12,
         },
       }),
     ).toThrow();
@@ -65,7 +65,7 @@ describe("parseVisualization", () => {
           cameraMode: "isometric",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
-          zoom: 1,
+          groundSpan: 12,
         },
       }),
     ).toThrow();
@@ -91,7 +91,111 @@ describe("parseVisualization", () => {
           cameraMode: "isometric",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
+          groundSpan: 12,
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a non-Visualization JSON value", () => {
+    expect(() => parseVisualization("not-a-visualization")).toThrow();
+  });
+
+  it("rejects an unsupported future schema version", () => {
+    expect(() =>
+      parseVisualization({
+        schemaVersion: 2,
+        nodes: [],
+        groups: [],
+        connections: [],
+        openingView: {
+          cameraMode: "isometric",
+          quarterTurns: 0,
+          center: { x: 0, z: 0 },
+          groundSpan: 12,
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("reports an unsupported future version with stable diagnostics", () => {
+    expect(
+      safeParseVisualization({
+        schemaVersion: 2,
+        nodes: [],
+        groups: [],
+        connections: [],
+        openingView: {
+          cameraMode: "isometric",
+          quarterTurns: 0,
+          center: { x: 0, z: 0 },
+          groundSpan: 12,
+        },
+      }),
+    ).toEqual({
+      success: false,
+      diagnostics: [
+        {
+          code: "unsupported-schema-version",
+          severity: "error",
+          entityKind: "visualization",
+          message: "Visualization schema version 2 is not supported.",
+          path: ["schemaVersion"],
+        },
+      ],
+    });
+  });
+
+  it("reports malformed structure with stable diagnostics", () => {
+    expect(
+      safeParseVisualization({
+        schemaVersion: 1,
+        nodes: [],
+        groups: [],
+        connections: [],
+      }),
+    ).toEqual({
+      success: false,
+      diagnostics: [
+        {
+          code: "invalid-structure",
+          severity: "error",
+          entityKind: "visualization",
+          message:
+            'Visualization has invalid structure at "openingView": expected an object.',
+          path: ["openingView"],
+        },
+      ],
+    });
+  });
+
+  it("rejects renderer-specific zoom and a non-positive Ground Span", () => {
+    expect(() =>
+      parseVisualization({
+        schemaVersion: 1,
+        nodes: [],
+        groups: [],
+        connections: [],
+        openingView: {
+          cameraMode: "isometric",
+          quarterTurns: 0,
+          center: { x: 0, z: 0 },
           zoom: 1,
+        },
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseVisualization({
+        schemaVersion: 1,
+        nodes: [],
+        groups: [],
+        connections: [],
+        openingView: {
+          cameraMode: "isometric",
+          quarterTurns: 0,
+          center: { x: 0, z: 0 },
+          groundSpan: 0,
         },
       }),
     ).toThrow();

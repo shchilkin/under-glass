@@ -1,4 +1,35 @@
 export {
+  ASSET_DEFINITION_SCHEMA_VERSION,
+  assetDefinitionSchema,
+  parseAssetDefinition,
+  safeParseAssetDefinition,
+  type AssetDefinition,
+  type AssetFootprint,
+  type AssetLocalPoint,
+  type AssetProvenance,
+  type ConnectionPort,
+  type GroundNormal,
+  type Quaternion,
+} from "./asset-definition.js";
+
+export {
+  validateAssetDefinitionSemantics,
+  type AssetDefinitionDiagnostic,
+  type AssetDefinitionDiagnosticCode,
+  type AssetDefinitionDiagnosticPath,
+} from "./asset-definition-validation.js";
+
+export { type DiagnosticPath, type DiagnosticSeverity } from "./diagnostics.js";
+
+export {
+  StructuralValidationError,
+  type PersistedContractKind,
+  type StructuralDiagnostic,
+  type StructuralDiagnosticCode,
+  type StructuralParseResult,
+} from "./structural-validation.js";
+
+export {
   CURRENT_SCHEMA_VERSION,
   parseVisualization,
   safeParseVisualization,

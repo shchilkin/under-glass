@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "number", "const": 1 },
+    "assetId": { "type": "string", "minLength": 1 },
+    "scale": { "type": "number", "exclusiveMinimum": 0 },
+    "normalizationRotation": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "w": { "type": "number" }
+      },
+      "required": ["x", "y", "z", "w"],
+      "additionalProperties": false
+    },
+    "groundContact": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      },
+      "required": ["x", "y", "z"],
+      "additionalProperties": false
+    },
+    "footprint": {
+      "type": "object",
+      "properties": {
+        "minX": { "type": "number" },
+        "minZ": { "type": "number" },
+        "maxX": { "type": "number" },
+        "maxZ": { "type": "number" }
+      },
+      "required": ["minX", "minZ", "maxX", "maxZ"],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "license": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "author": { "type": "string", "minLength": 1 },
+        "copyright": { "type": "string", "minLength": 1 }
+      },
+      "required": ["license", "source"],
+      "additionalProperties": false
+    },
+    "connectionPorts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "position": {
+            "type": "object",
+            "properties": {
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "z": { "type": "number" }
+            },
+            "required": ["x", "y", "z"],
+            "additionalProperties": false
+          },
+          "normal": {
+            "type": "object",
+            "properties": {
+              "x": { "type": "number" },
+              "z": { "type": "number" }
+            },
+            "required": ["x", "z"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "position", "normal"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "assetId",
+    "scale",
+    "normalizationRotation",
+    "groundContact",
+    "footprint",
+    "provenance"
+  ],
+  "additionalProperties": false,
+  "$id": "urn:under-glass:schema:asset-definition:v1",
+  "title": "Under Glass Asset Definition v1"
+}

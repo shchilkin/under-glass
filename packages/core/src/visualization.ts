@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+import {
+  parsePersistedContract,
+  safeParsePersistedContract,
+  type StructuralParseResult,
+} from "./structural-validation.js";
+import { groundCoordinatesSchema, groundRectangleSchema } from "./geometry.js";
+
 export const CURRENT_SCHEMA_VERSION: 1 = 1;
 
 export type JsonValue =
@@ -28,31 +35,10 @@ const quarterTurnsSchema: z.ZodType<0 | 1 | 2 | 3> = z.union([
   z.literal(3),
 ]);
 
-const groundPointSchema: z.ZodObject<
-  {
-    x: z.ZodNumber;
-    z: z.ZodNumber;
-  },
-  z.core.$strict
-> = z.strictObject({
-  x: z.number().finite(),
-  z: z.number().finite(),
-});
+const groundPointSchema: typeof groundCoordinatesSchema =
+  groundCoordinatesSchema;
 
-const groundBoundsSchema: z.ZodObject<
-  {
-    minX: z.ZodNumber;
-    minZ: z.ZodNumber;
-    maxX: z.ZodNumber;
-    maxZ: z.ZodNumber;
-  },
-  z.core.$strict
-> = z.strictObject({
-  minX: z.number().finite(),
-  minZ: z.number().finite(),
-  maxX: z.number().finite(),
-  maxZ: z.number().finite(),
-});
+const groundBoundsSchema: typeof groundRectangleSchema = groundRectangleSchema;
 
 const sourceReferenceSchema: z.ZodObject<
   {
@@ -170,14 +156,14 @@ const openingViewSchema: z.ZodObject<
     }>;
     quarterTurns: typeof quarterTurnsSchema;
     center: typeof groundPointSchema;
-    zoom: z.ZodNumber;
+    groundSpan: z.ZodNumber;
   },
   z.core.$strict
 > = z.strictObject({
   cameraMode: z.enum(["isometric", "top"]),
   quarterTurns: quarterTurnsSchema,
   center: groundPointSchema,
-  zoom: z.number().positive().finite(),
+  groundSpan: z.number().positive().finite(),
 });
 
 export const visualizationSchema: z.ZodObject<
@@ -210,11 +196,19 @@ export type SourceReference = z.output<typeof sourceReferenceSchema>;
 export type Visualization = z.output<typeof visualizationSchema>;
 
 export function parseVisualization(input: unknown): Visualization {
-  return visualizationSchema.parse(input);
+  return parsePersistedContract(input, visualizationSchema, {
+    currentSchemaVersion: CURRENT_SCHEMA_VERSION,
+    kind: "visualization",
+    label: "Visualization",
+  });
 }
 
 export function safeParseVisualization(
   input: unknown,
-): z.ZodSafeParseResult<Visualization> {
-  return visualizationSchema.safeParse(input);
+): StructuralParseResult<Visualization> {
+  return safeParsePersistedContract(input, visualizationSchema, {
+    currentSchemaVersion: CURRENT_SCHEMA_VERSION,
+    kind: "visualization",
+    label: "Visualization",
+  });
 }
