@@ -77,38 +77,46 @@ function findNonJsonArrayValue(
   return null;
 }
 
+function isPlainJsonObject(input: object): boolean {
+  const prototype = Object.getPrototypeOf(input) as object | null;
+  return prototype === Object.prototype || prototype === null;
+}
+
+function findNonJsonPropertyValue(
+  input: object,
+  key: PropertyKey,
+  path: DiagnosticPath,
+  ancestors: WeakSet<object>,
+): DiagnosticPath | null {
+  const propertyPath = [
+    ...path,
+    typeof key === "symbol" ? (key.description ?? "<symbol>") : key,
+  ];
+
+  if (typeof key === "symbol") {
+    return propertyPath;
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(input, key);
+
+  if (descriptor === undefined || !("value" in descriptor)) {
+    return propertyPath;
+  }
+
+  return findNonJsonValue(descriptor.value, propertyPath, ancestors);
+}
+
 function findNonJsonObjectValue(
   input: object,
   path: DiagnosticPath,
   ancestors: WeakSet<object>,
 ): DiagnosticPath | null {
-  const prototype = Object.getPrototypeOf(input) as object | null;
-
-  if (prototype !== Object.prototype && prototype !== null) {
+  if (!isPlainJsonObject(input)) {
     return path;
   }
 
   for (const key of Reflect.ownKeys(input)) {
-    const propertyPath = [
-      ...path,
-      typeof key === "symbol" ? (key.description ?? "<symbol>") : key,
-    ];
-
-    if (typeof key === "symbol") {
-      return propertyPath;
-    }
-
-    const descriptor = Object.getOwnPropertyDescriptor(input, key);
-
-    if (descriptor === undefined || !("value" in descriptor)) {
-      return propertyPath;
-    }
-
-    const invalidPath = findNonJsonValue(
-      descriptor.value,
-      propertyPath,
-      ancestors,
-    );
+    const invalidPath = findNonJsonPropertyValue(input, key, path, ancestors);
 
     if (invalidPath !== null) {
       return invalidPath;
