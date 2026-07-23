@@ -13,7 +13,7 @@ describe("parseVisualization", () => {
         cameraMode: "isometric",
         quarterTurns: 0,
         center: { x: 0, z: 0 },
-        zoom: 1,
+        groundSpan: 12,
       },
     };
 
@@ -31,7 +31,7 @@ describe("parseVisualization", () => {
           cameraMode: "top",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
-          zoom: 1,
+          groundSpan: 12,
         },
       }),
     ).toThrow();
@@ -48,7 +48,7 @@ describe("parseVisualization", () => {
           cameraMode: "isometric",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
-          zoom: 1,
+          groundSpan: 12,
         },
       }),
     ).toThrow();
@@ -65,7 +65,7 @@ describe("parseVisualization", () => {
           cameraMode: "isometric",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
-          zoom: 1,
+          groundSpan: 12,
         },
       }),
     ).toThrow();
@@ -91,7 +91,60 @@ describe("parseVisualization", () => {
           cameraMode: "isometric",
           quarterTurns: 0,
           center: { x: 0, z: 0 },
+          groundSpan: 12,
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a non-document JSON value", () => {
+    expect(() => parseVisualization("not-a-visualization")).toThrow();
+  });
+
+  it("rejects an unsupported future schema version", () => {
+    expect(() =>
+      parseVisualization({
+        schemaVersion: 2,
+        nodes: [],
+        groups: [],
+        connections: [],
+        openingView: {
+          cameraMode: "isometric",
+          quarterTurns: 0,
+          center: { x: 0, z: 0 },
+          groundSpan: 12,
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects renderer-specific zoom and a non-positive Ground Span", () => {
+    expect(() =>
+      parseVisualization({
+        schemaVersion: 1,
+        nodes: [],
+        groups: [],
+        connections: [],
+        openingView: {
+          cameraMode: "isometric",
+          quarterTurns: 0,
+          center: { x: 0, z: 0 },
           zoom: 1,
+        },
+      }),
+    ).toThrow();
+
+    expect(() =>
+      parseVisualization({
+        schemaVersion: 1,
+        nodes: [],
+        groups: [],
+        connections: [],
+        openingView: {
+          cameraMode: "isometric",
+          quarterTurns: 0,
+          center: { x: 0, z: 0 },
+          groundSpan: 0,
         },
       }),
     ).toThrow();

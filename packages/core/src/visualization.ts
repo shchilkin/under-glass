@@ -170,14 +170,14 @@ const openingViewSchema: z.ZodObject<
     }>;
     quarterTurns: typeof quarterTurnsSchema;
     center: typeof groundPointSchema;
-    zoom: z.ZodNumber;
+    groundSpan: z.ZodNumber;
   },
   z.core.$strict
 > = z.strictObject({
   cameraMode: z.enum(["isometric", "top"]),
   quarterTurns: quarterTurnsSchema,
   center: groundPointSchema,
-  zoom: z.number().positive().finite(),
+  groundSpan: z.number().positive().finite(),
 });
 
 export const visualizationSchema: z.ZodObject<

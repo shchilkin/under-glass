@@ -1,4 +1,25 @@
 export {
+  ASSET_DEFINITION_SCHEMA_VERSION,
+  assetDefinitionSchema,
+  parseAssetDefinition,
+  safeParseAssetDefinition,
+  type AssetDefinition,
+  type AssetFootprint,
+  type AssetPoint,
+  type AssetProvenance,
+  type ConnectionPort,
+  type GroundNormal,
+  type Quaternion,
+} from "./asset-definition.js";
+
+export {
+  validateAssetDefinitionSemantics,
+  type AssetDefinitionDiagnostic,
+  type AssetDefinitionDiagnosticCode,
+  type AssetDefinitionDiagnosticPath,
+} from "./asset-definition-validation.js";
+
+export {
   CURRENT_SCHEMA_VERSION,
   parseVisualization,
   safeParseVisualization,
@@ -19,6 +40,7 @@ export {
 
 export {
   validateVisualizationSemantics,
+  type DiagnosticSeverity,
   type VisualizationDiagnostic,
   type VisualizationDiagnosticCode,
   type VisualizationDiagnosticPath,

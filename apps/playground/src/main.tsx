@@ -14,7 +14,7 @@ const emptyVisualization = parseVisualization({
     cameraMode: "isometric",
     quarterTurns: 0,
     center: { x: 0, z: 0 },
-    zoom: 1,
+    groundSpan: 12,
   },
 });
 

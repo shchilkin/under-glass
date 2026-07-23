@@ -187,9 +187,9 @@
           "required": ["x", "z"],
           "additionalProperties": false
         },
-        "zoom": { "type": "number", "exclusiveMinimum": 0 }
+        "groundSpan": { "type": "number", "exclusiveMinimum": 0 }
       },
-      "required": ["cameraMode", "quarterTurns", "center", "zoom"],
+      "required": ["cameraMode", "quarterTurns", "center", "groundSpan"],
       "additionalProperties": false
     }
   },
