@@ -1,6 +1,7 @@
 import type {
   AssetDefinition,
   DiagnosticSeverity,
+  OpeningView,
   Visualization,
 } from "@under-glass/core";
 
@@ -11,7 +12,6 @@ export type SceneRendererDiagnosticCode =
   | "asset-load-failed"
   | "node-outside-group-bounds"
   | "renderer-unavailable"
-  | "unsupported-connections"
   | "visualization-invalid";
 
 export interface SceneRendererDiagnostic {
@@ -42,5 +42,6 @@ export interface CreateSceneRendererOptions {
 export interface SceneRenderer {
   dispose(): void;
   getSnapshot(): SceneRendererSnapshot;
+  setCameraMode(cameraMode: OpeningView["cameraMode"]): void;
   subscribe(listener: () => void): () => void;
 }

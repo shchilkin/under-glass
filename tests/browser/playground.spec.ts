@@ -186,18 +186,59 @@ test("reports a stable failed lifecycle when WebGL2 is unavailable", async ({
   );
 });
 
-test("fails rather than silently omitting deferred Connections", async ({
+test("renders basic Connections instead of failing the scene", async ({
   page,
 }) => {
   await page.goto("/?connections");
 
   await expect(
-    page.getByText("loading → failed", { exact: true }),
+    page.getByText("loading → ready", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText("unsupported-connections", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByLabel("Renderer diagnostics")).toHaveCount(0);
   await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
-    0,
+    1,
   );
+});
+
+test("renders the canonical project graph in both camera modes", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=graph");
+
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("node-count")).toHaveText("8");
+  await expect(page.getByTestId("connection-count")).toHaveText("8");
+  await expect(page.getByTestId("group-count")).toHaveText("2");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(2);
+  await expect(
+    page.locator('[data-under-glass-label="connection"]'),
+  ).toHaveCount(2);
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  const isometric = page.getByRole("button", {
+    name: "Isometric",
+    exact: true,
+  });
+  const top = page.getByRole("button", { name: "Top", exact: true });
+
+  await expect(isometric).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-mode",
+    "isometric",
+  );
+  const canvas = page.locator("canvas[data-under-glass-renderer]");
+  const isometricPixels = await canvas.screenshot();
+
+  await top.click();
+
+  await expect(top).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  const topPixels = await canvas.screenshot();
+
+  expect(topPixels.equals(isometricPixels)).toBe(false);
 });

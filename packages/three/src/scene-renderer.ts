@@ -1,8 +1,12 @@
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
   Color,
   DirectionalLight,
-  PerspectiveCamera,
+  Group,
+  HemisphereLight,
+  OrthographicCamera,
+  PCFShadowMap,
   Scene,
   SRGBColorSpace,
   WebGLRenderer,
@@ -10,8 +14,18 @@ import {
   type Object3D,
 } from "three";
 
-import type { AssetDefinition, Node, Visualization } from "@under-glass/core";
-import { validateVisualizationSemantics } from "@under-glass/core";
+import type {
+  AssetDefinition,
+  BasicConnectionRoute,
+  GroundBounds,
+  Node,
+  OpeningView,
+  Visualization,
+} from "@under-glass/core";
+import {
+  routeBasicConnections,
+  validateVisualizationSemantics,
+} from "@under-glass/core";
 
 import {
   createAssetSession,
@@ -20,6 +34,7 @@ import {
   type PreparedNodeAsset,
 } from "./asset-session.js";
 import { parseGlb } from "./glb.js";
+import { createLabelOverlay, type LabelOverlay } from "./label-overlay.js";
 import {
   disposeObjectResourceRoots,
   disposeObjectResources,
@@ -28,9 +43,20 @@ import {
   createAssetPlaceholder,
   createGroundPlane,
   createPlacedAsset,
+  derivePlacedFootprintGroundBounds,
   updateAssetPlaceholder,
   updateGroundPlane,
 } from "./scene-layout.js";
+import {
+  applyOpeningView,
+  createOpeningViewCamera,
+  type CameraMode,
+} from "./scene-camera.js";
+import {
+  createConnectionRoute,
+  createGroupSurface,
+  createInfiniteGrid,
+} from "./scene-graph.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
 import type {
   CreateSceneRendererOptions,
@@ -39,9 +65,14 @@ import type {
 } from "./types.js";
 
 interface RenderingSurface {
-  readonly camera: PerspectiveCamera;
+  readonly camera: OrthographicCamera;
   readonly canvas: HTMLCanvasElement;
+  cameraMode: CameraMode;
+  readonly connectionLayer: Group;
+  readonly container: HTMLElement;
   readonly groundPlane: Mesh;
+  readonly labels: LabelOverlay;
+  readonly openingView: OpeningView;
   readonly resizeObserver: ResizeObserver;
   readonly scene: Scene;
   readonly webGlRenderer: WebGLRenderer;
@@ -50,7 +81,9 @@ interface RenderingSurface {
 interface RendererSession {
   readonly assetDefinitionsByNode: Map<string, AssetDefinition>;
   readonly assets: AssetSession;
+  readonly footprintsByNode: Map<string, GroundBounds>;
   readonly placeholders: Map<string, Mesh>;
+  routes: BasicConnectionRoute[];
   disposed: boolean;
   surface: RenderingSurface | null;
 }
@@ -94,6 +127,7 @@ function removeAssetPlaceholder(
 
 function renderSurface(surface: RenderingSurface): void {
   surface.webGlRenderer.render(surface.scene, surface.camera);
+  surface.labels.render(surface.camera);
 }
 
 function resizeSurface(
@@ -103,8 +137,13 @@ function resizeSurface(
   const width = Math.max(1, container.clientWidth);
   const height = Math.max(1, container.clientHeight);
 
-  surface.camera.aspect = width / height;
-  surface.camera.updateProjectionMatrix();
+  applyOpeningView(
+    surface.camera,
+    surface.openingView,
+    surface.cameraMode,
+    width,
+    height,
+  );
   surface.webGlRenderer.setSize(width, height, false);
   renderSurface(surface);
 }
@@ -120,9 +159,11 @@ function createRenderingSurface(
     powerPreference: "high-performance",
   });
   const scene = new Scene();
-  const camera = new PerspectiveCamera(40, 1, 0.1, 100);
+  const camera = createOpeningViewCamera();
   const center = visualization.openingView.center;
   const groundPlane = createGroundPlane(visualization, new Map());
+  const connectionLayer = new Group();
+  const labels = createLabelOverlay(container, visualization);
 
   canvas.dataset.underGlassRenderer = "";
   canvas.setAttribute("aria-hidden", "true");
@@ -133,21 +174,45 @@ function createRenderingSurface(
 
   webGlRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   webGlRenderer.outputColorSpace = SRGBColorSpace;
-  scene.background = new Color(0x111816);
-  scene.add(new AmbientLight(0xffffff, 1.7));
+  webGlRenderer.shadowMap.enabled = true;
+  webGlRenderer.shadowMap.type = PCFShadowMap;
+  webGlRenderer.toneMapping = ACESFilmicToneMapping;
+  webGlRenderer.toneMappingExposure = 1.08;
+  scene.background = new Color(0x0e1311);
+  scene.add(new HemisphereLight(0xe8f3ed, 0x18201d, 1.6));
+  scene.add(new AmbientLight(0xffffff, 0.65));
   scene.add(groundPlane);
+  scene.add(createInfiniteGrid(visualization.openingView));
 
-  const keyLight = new DirectionalLight(0xffffff, 3.2);
-  keyLight.position.set(center.x + 4, 7, center.z + 5);
+  for (const group of visualization.groups) {
+    scene.add(createGroupSurface(group));
+  }
+
+  connectionLayer.name = "Connections";
+  scene.add(connectionLayer);
+
+  const keyLight = new DirectionalLight(0xffffff, 3.6);
+  keyLight.position.set(center.x - 6, 11, center.z + 7);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(1024, 1024);
+  keyLight.shadow.bias = -0.0004;
+  keyLight.shadow.radius = 4;
   scene.add(keyLight);
+  const fillLight = new DirectionalLight(0xa9d7c0, 1.1);
+  fillLight.position.set(center.x + 8, 6, center.z - 8);
+  scene.add(fillLight);
 
-  camera.position.set(center.x + 5, 4.5, center.z + 6);
-  camera.lookAt(center.x, 0, center.z);
+  container.dataset.underGlassCameraMode = visualization.openingView.cameraMode;
 
   const surface: RenderingSurface = {
     camera,
     canvas,
+    cameraMode: visualization.openingView.cameraMode,
+    connectionLayer,
+    container,
     groundPlane,
+    labels,
+    openingView: visualization.openingView,
     resizeObserver: new ResizeObserver(() => {
       resizeSurface(surface, container);
     }),
@@ -160,24 +225,56 @@ function createRenderingSurface(
   return surface;
 }
 
+function updateGraphPresentation(
+  visualization: Visualization,
+  surface: RenderingSurface,
+  session: RendererSession,
+): void {
+  for (const child of [...surface.connectionLayer.children]) {
+    surface.connectionLayer.remove(child);
+    disposeObjectResources(child);
+  }
+
+  session.routes = routeBasicConnections(
+    visualization,
+    session.footprintsByNode,
+  );
+
+  for (const route of session.routes) {
+    surface.connectionLayer.add(createConnectionRoute(route));
+  }
+
+  surface.labels.setRoutes(session.routes);
+  updateGroundPlane(
+    surface.groundPlane,
+    visualization,
+    session.assetDefinitionsByNode,
+    session.routes,
+  );
+  renderSurface(surface);
+}
+
 function applyResolvedAssetDefinition(
   node: Node,
   definition: AssetDefinition,
   context: NodeLoadContext,
 ): void {
   context.session.assetDefinitionsByNode.set(node.id, definition);
+  context.session.footprintsByNode.set(
+    node.id,
+    derivePlacedFootprintGroundBounds(node, definition),
+  );
   const placeholder = context.session.placeholders.get(node.id);
 
   if (placeholder !== undefined) {
     updateAssetPlaceholder(placeholder, node, definition);
   }
 
-  updateGroundPlane(
-    context.surface.groundPlane,
+  updateGraphPresentation(
     context.options.visualization,
-    context.session.assetDefinitionsByNode,
+    context.surface,
+    context.session,
   );
-  renderSurface(context.surface);
 }
 
 async function prepareNodeAsset(
@@ -278,21 +375,12 @@ function disposeSurface(
   assetRoots: Iterable<Object3D>,
 ): void {
   surface.resizeObserver.disconnect();
+  surface.labels.dispose();
   disposeObjectResourceRoots([surface.scene, ...assetRoots]);
   surface.webGlRenderer.renderLists.dispose();
   surface.webGlRenderer.dispose();
   surface.webGlRenderer.forceContextLoss();
   surface.canvas.remove();
-}
-
-function unsupportedConnectionsDiagnostic(
-  connectionCount: number,
-): SceneRendererDiagnostic {
-  return {
-    code: "unsupported-connections",
-    message: `Connections are deferred to v0.2; received ${connectionCount}.`,
-    severity: "error",
-  };
 }
 
 function rendererUnavailableDiagnostic(
@@ -339,10 +427,6 @@ function semanticDiagnostics(
 function visualizationDiagnostics(
   visualization: Visualization,
 ): SceneRendererDiagnostic[] {
-  if (visualization.connections.length > 0) {
-    return [unsupportedConnectionsDiagnostic(visualization.connections.length)];
-  }
-
   return semanticDiagnostics(visualization);
 }
 
@@ -407,6 +491,7 @@ function startSceneRendering(
     }
 
     addAssetPlaceholders(options.visualization.nodes, surface, session);
+    updateGraphPresentation(options.visualization, surface, session);
     void loadNodes(
       options.visualization.nodes,
       options,
@@ -450,6 +535,17 @@ function createSceneRendererHandle(
       disposeRendererSession(store, session);
     },
     getSnapshot: store.getSnapshot,
+    setCameraMode(cameraMode: CameraMode): void {
+      const surface = session.surface;
+
+      if (session.disposed || surface === null) {
+        return;
+      }
+
+      surface.cameraMode = cameraMode;
+      surface.container.dataset.underGlassCameraMode = cameraMode;
+      resizeSurface(surface, surface.container);
+    },
     subscribe: store.subscribe,
   };
 }
@@ -467,7 +563,9 @@ export function createSceneRenderer(
       parseAsset: parseGlb,
       resolveAsset: options.resolveAsset,
     }),
+    footprintsByNode: new Map(),
     placeholders: new Map(),
+    routes: [],
     disposed: false,
     surface: null,
   };

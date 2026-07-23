@@ -1,15 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { parseVisualization, type Node } from "@under-glass/core";
+import {
+  parseVisualization,
+  type Node,
+  type OpeningView,
+  type Visualization,
+} from "@under-glass/core";
 import {
   createSceneRenderer,
   type ResolvedAsset,
+  type SceneRenderer,
   type SceneRendererSnapshot,
   type SceneRendererStatus,
 } from "@under-glass/three";
 
 import { markDemoGlbAsCompressed, resolveDemoAsset } from "./demo-asset.js";
+import { PROJECT_GRAPH_VISUALIZATION } from "./project-graph-fixture.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
@@ -152,29 +159,37 @@ async function resolvePlaygroundAsset(assetId: string): Promise<ResolvedAsset> {
   return resolveDemoAsset(assetId);
 }
 
-const demoVisualization = parseVisualization({
-  schemaVersion: 1,
-  nodes: demoNodes,
-  groups: [],
-  connections: showUnsupportedConnection
-    ? [
-        {
-          id: "unsupported-connection",
-          label: "",
-          source: { nodeId: "demo-node" },
-          target: { nodeId: "demo-node" },
-          direction: "undirected",
-          routeAnchors: [],
-        },
-      ]
-    : [],
-  openingView: {
-    cameraMode: "isometric",
-    quarterTurns: 0,
-    center: { x: 0, z: 0 },
-    groundSpan: 12,
-  },
-});
+function createDemoVisualization(): Visualization {
+  if (scenario === "graph") {
+    return PROJECT_GRAPH_VISUALIZATION;
+  }
+
+  return parseVisualization({
+    schemaVersion: 1,
+    nodes: demoNodes,
+    groups: [],
+    connections: showUnsupportedConnection
+      ? [
+          {
+            id: "supported-connection",
+            label: "Loop",
+            source: { nodeId: "demo-node" },
+            target: { nodeId: "demo-node" },
+            direction: "undirected",
+            routeAnchors: [],
+          },
+        ]
+      : [],
+    openingView: {
+      cameraMode: "isometric",
+      quarterTurns: 0,
+      center: { x: 0, z: 0 },
+      groundSpan: 12,
+    },
+  });
+}
+
+const demoVisualization = createDemoVisualization();
 
 const loadingSnapshot: SceneRendererSnapshot = {
   diagnostics: [],
@@ -190,8 +205,12 @@ function appendStatus(
 
 function App() {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
+  const rendererRef = useRef<SceneRenderer | null>(null);
   const [snapshot, setSnapshot] =
     useState<SceneRendererSnapshot>(loadingSnapshot);
+  const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
+    demoVisualization.openingView.cameraMode,
+  );
   const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([]);
   const [assetResolveCount, setAssetResolveCount] = useState(0);
 
@@ -210,6 +229,7 @@ function App() {
       },
       visualization: demoVisualization,
     });
+    rendererRef.current = renderer;
     const updateSnapshot = () => {
       const nextSnapshot = renderer.getSnapshot();
       setSnapshot(nextSnapshot);
@@ -220,18 +240,41 @@ function App() {
     updateSnapshot();
 
     return () => {
+      rendererRef.current = null;
       unsubscribe();
       renderer.dispose();
     };
   }, []);
 
+  useEffect(() => {
+    rendererRef.current?.setCameraMode(cameraMode);
+  }, [cameraMode]);
+
   return (
-    <main>
+    <main className={scenario === "graph" ? "app app--graph" : "app"}>
       <p className="eyebrow">Open-source project visualization</p>
       <h1>Under Glass</h1>
       <p className="lede">
-        A host-resolved GLB crossing the public renderer boundary.
+        {scenario === "graph"
+          ? "A host-resolved project system crossing the public renderer boundary."
+          : "A host-resolved GLB crossing the public renderer boundary."}
       </p>
+      <div aria-label="Camera mode" className="camera-mode">
+        <button
+          aria-pressed={cameraMode === "isometric"}
+          onClick={() => setCameraMode("isometric")}
+          type="button"
+        >
+          Isometric
+        </button>
+        <button
+          aria-pressed={cameraMode === "top"}
+          onClick={() => setCameraMode("top")}
+          type="button"
+        >
+          Top
+        </button>
+      </div>
       <div
         aria-label="Under Glass 3D scene"
         className="scene"
@@ -249,6 +292,16 @@ function App() {
         <div>
           <dt>Nodes</dt>
           <dd data-testid="node-count">{demoVisualization.nodes.length}</dd>
+        </div>
+        <div>
+          <dt>Connections</dt>
+          <dd data-testid="connection-count">
+            {demoVisualization.connections.length}
+          </dd>
+        </div>
+        <div>
+          <dt>Groups</dt>
+          <dd data-testid="group-count">{demoVisualization.groups.length}</dd>
         </div>
         <div>
           <dt>Asset resolves</dt>

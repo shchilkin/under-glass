@@ -3,6 +3,7 @@ import {
   Group,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
@@ -10,7 +11,14 @@ import {
   type Object3D,
 } from "three";
 
-import type { AssetDefinition, Node, Visualization } from "@under-glass/core";
+import type {
+  AssetDefinition,
+  BasicConnectionRoute,
+  GroundBounds,
+  Node,
+  Visualization,
+} from "@under-glass/core";
+import { deriveVisualizationBounds } from "@under-glass/core";
 
 interface GroundPlaneBounds {
   readonly centerX: number;
@@ -19,7 +27,6 @@ interface GroundPlaneBounds {
   readonly width: number;
 }
 
-const GROUND_PLANE_PADDING = 2;
 const PLACEHOLDER_HEIGHT = 0.75;
 
 function createNodePlacementMatrix(
@@ -58,10 +65,10 @@ function createNodePlacementMatrix(
   );
 }
 
-function derivePlacedFootprintBounds(
+export function derivePlacedFootprintGroundBounds(
   node: Node,
   definition: AssetDefinition,
-): GroundPlaneBounds {
+): GroundBounds {
   const footprint = definition.footprint;
   const groundContact = definition.groundContact;
   const placementMatrix = createNodePlacementMatrix(node, definition);
@@ -82,10 +89,19 @@ function derivePlacedFootprintBounds(
   const maxZ = Math.max(...zCoordinates);
 
   return {
-    centerX: (minX + maxX) / 2,
-    centerZ: (minZ + maxZ) / 2,
-    depth: maxZ - minZ,
-    width: maxX - minX,
+    minX,
+    minZ,
+    maxX,
+    maxZ,
+  };
+}
+
+function toGroundPlaneBounds(bounds: GroundBounds): GroundPlaneBounds {
+  return {
+    centerX: (bounds.minX + bounds.maxX) / 2,
+    centerZ: (bounds.minZ + bounds.maxZ) / 2,
+    depth: bounds.maxZ - bounds.minZ,
+    width: bounds.maxX - bounds.minX,
   };
 }
 
@@ -98,52 +114,27 @@ function defaultFootprintBounds(node: Node): GroundPlaneBounds {
   };
 }
 
-function nodeFootprintBounds(
-  node: Node,
-  definitionsByNode: ReadonlyMap<string, AssetDefinition>,
-): GroundPlaneBounds {
-  const definition = definitionsByNode.get(node.id);
-  return definition === undefined
-    ? defaultFootprintBounds(node)
-    : derivePlacedFootprintBounds(node, definition);
-}
-
 function deriveSceneGroundPlaneBounds(
   visualization: Visualization,
   definitionsByNode: ReadonlyMap<string, AssetDefinition>,
+  routes: readonly BasicConnectionRoute[],
 ): GroundPlaneBounds {
-  const nodeBounds = visualization.nodes.map((node) =>
-    nodeFootprintBounds(node, definitionsByNode),
-  );
+  const footprintsByNode = new Map<string, GroundBounds>();
 
-  if (nodeBounds.length === 0) {
-    return {
-      centerX: visualization.openingView.center.x,
-      centerZ: visualization.openingView.center.z,
-      depth: GROUND_PLANE_PADDING * 2,
-      width: GROUND_PLANE_PADDING * 2,
-    };
+  for (const node of visualization.nodes) {
+    const definition = definitionsByNode.get(node.id);
+
+    if (definition !== undefined) {
+      footprintsByNode.set(
+        node.id,
+        derivePlacedFootprintGroundBounds(node, definition),
+      );
+    }
   }
 
-  const minX = Math.min(
-    ...nodeBounds.map((bounds) => bounds.centerX - bounds.width / 2),
+  return toGroundPlaneBounds(
+    deriveVisualizationBounds(visualization, footprintsByNode, routes),
   );
-  const maxX = Math.max(
-    ...nodeBounds.map((bounds) => bounds.centerX + bounds.width / 2),
-  );
-  const minZ = Math.min(
-    ...nodeBounds.map((bounds) => bounds.centerZ - bounds.depth / 2),
-  );
-  const maxZ = Math.max(
-    ...nodeBounds.map((bounds) => bounds.centerZ + bounds.depth / 2),
-  );
-
-  return {
-    centerX: (minX + maxX) / 2,
-    centerZ: (minZ + maxZ) / 2,
-    depth: maxZ - minZ + GROUND_PLANE_PADDING * 2,
-    width: maxX - minX + GROUND_PLANE_PADDING * 2,
-  };
 }
 
 export function createAssetPlaceholder(node: Node): Mesh {
@@ -175,7 +166,9 @@ export function updateAssetPlaceholder(
   node: Node,
   definition: AssetDefinition,
 ): void {
-  const bounds = derivePlacedFootprintBounds(node, definition);
+  const bounds = toGroundPlaneBounds(
+    derivePlacedFootprintGroundBounds(node, definition),
+  );
 
   placeholder.geometry.dispose();
   placeholder.geometry = new BoxGeometry(
@@ -193,13 +186,18 @@ export function updateAssetPlaceholder(
 export function createGroundPlane(
   visualization: Visualization,
   definitionsByNode: ReadonlyMap<string, AssetDefinition>,
+  routes: readonly BasicConnectionRoute[] = [],
 ): Mesh {
-  const bounds = deriveSceneGroundPlaneBounds(visualization, definitionsByNode);
+  const bounds = deriveSceneGroundPlaneBounds(
+    visualization,
+    definitionsByNode,
+    routes,
+  );
   const geometry = new PlaneGeometry(bounds.width, bounds.depth);
-  const material = new MeshStandardMaterial({
-    color: 0x1b2521,
-    metalness: 0,
-    roughness: 1,
+  const material = new MeshBasicMaterial({
+    depthWrite: false,
+    opacity: 0,
+    transparent: true,
   });
   const groundPlane = new Mesh(geometry, material);
 
@@ -214,8 +212,13 @@ export function updateGroundPlane(
   groundPlane: Mesh,
   visualization: Visualization,
   definitionsByNode: ReadonlyMap<string, AssetDefinition>,
+  routes: readonly BasicConnectionRoute[],
 ): void {
-  const bounds = deriveSceneGroundPlaneBounds(visualization, definitionsByNode);
+  const bounds = deriveSceneGroundPlaneBounds(
+    visualization,
+    definitionsByNode,
+    routes,
+  );
 
   groundPlane.geometry.dispose();
   groundPlane.geometry = new PlaneGeometry(bounds.width, bounds.depth);
@@ -232,6 +235,12 @@ export function createPlacedAsset(
   placement.name = `Node ${node.id}`;
   placement.matrixAutoUpdate = false;
   placement.matrix.copy(createNodePlacementMatrix(node, definition));
+  asset.traverse((object) => {
+    if (object instanceof Mesh) {
+      object.castShadow = true;
+      object.receiveShadow = true;
+    }
+  });
   placement.add(asset);
   return placement;
 }
