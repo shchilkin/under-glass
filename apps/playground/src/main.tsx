@@ -20,11 +20,10 @@ import { PROJECT_GRAPH_VISUALIZATION } from "./project-graph-fixture.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
-type PrototypeCameraMotionProfile = "responsive" | "smooth" | "spring";
+type PrototypeCameraMotionProfile = "responsive" | "spring";
 const showConnection = searchParameters.has("connections");
 const scenario = searchParameters.get("scenario") ?? "single";
 const MOTION_PROFILES: readonly PrototypeCameraMotionProfile[] = [
-  "smooth",
   "responsive",
   "spring",
 ];
@@ -35,7 +34,20 @@ const initialMotionProfile: PrototypeCameraMotionProfile =
     requestedMotionProfile as PrototypeCameraMotionProfile,
   )
     ? (requestedMotionProfile as PrototypeCameraMotionProfile)
-    : "smooth";
+    : "responsive";
+
+if (
+  requestedMotionProfile !== null &&
+  requestedMotionProfile !== initialMotionProfile
+) {
+  searchParameters.set("motion", initialMotionProfile);
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}?${searchParameters.toString()}${window.location.hash}`,
+  );
+}
+
 const MOTION_PROFILE_COPY: Readonly<
   Record<
     PrototypeCameraMotionProfile,
@@ -45,10 +57,6 @@ const MOTION_PROFILE_COPY: Readonly<
   responsive: {
     description: "440 ms · strong ease-out",
     label: "Responsive",
-  },
-  smooth: {
-    description: "550 ms · symmetric ease-in-out",
-    label: "Smooth",
   },
   spring: {
     description: "650 ms · 3.5% overshoot",

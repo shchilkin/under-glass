@@ -10,24 +10,18 @@ import {
 
 describe("Camera Mode Transition profiles", () => {
   it("gives each prototype profile its deliberately tuned duration", () => {
-    expect(cameraMotionProfileDuration("smooth")).toBe(550);
     expect(cameraMotionProfileDuration("responsive")).toBe(440);
     expect(cameraMotionProfileDuration("spring")).toBe(650);
   });
 
   it("keeps exact endpoints while giving each profile a distinct midpoint", () => {
-    const profiles: PrototypeCameraMotionProfile[] = [
-      "smooth",
-      "responsive",
-      "spring",
-    ];
+    const profiles: PrototypeCameraMotionProfile[] = ["responsive", "spring"];
 
     for (const profile of profiles) {
       expect(sampleCameraMotionProfile(profile, 0)).toBe(0);
       expect(sampleCameraMotionProfile(profile, 1)).toBe(1);
     }
 
-    expect(sampleCameraMotionProfile("smooth", 0.5)).toBeCloseTo(0.5, 6);
     expect(sampleCameraMotionProfile("responsive", 0.5)).toBeCloseTo(0.9375, 6);
   });
 
@@ -69,19 +63,19 @@ describe("Camera Mode Transition profiles", () => {
     const transition = beginCameraModeTransition({
       from: 0.9,
       now: 0,
-      profile: "smooth",
+      profile: "responsive",
       to: 1,
       velocity: 0,
     });
 
-    expect(transition.duration).toBeCloseTo(55, 8);
+    expect(transition.duration).toBeCloseTo(44, 8);
   });
 
   it("retargets from the current progress and velocity without a jump", () => {
     const forward = beginCameraModeTransition({
       from: 0,
       now: 1_000,
-      profile: "smooth",
+      profile: "responsive",
       to: 1,
       velocity: 0,
     });
@@ -89,7 +83,7 @@ describe("Camera Mode Transition profiles", () => {
     const reverse = beginCameraModeTransition({
       from: moving.progress,
       now: 1_220,
-      profile: "smooth",
+      profile: "responsive",
       to: 0,
       velocity: moving.velocity,
     });
@@ -98,7 +92,7 @@ describe("Camera Mode Transition profiles", () => {
     expect(retargeted.progress).toBeCloseTo(moving.progress, 8);
     expect(retargeted.velocity).toBeCloseTo(moving.velocity, 8);
     expect(reverse.duration).toBeLessThan(
-      cameraMotionProfileDuration("smooth"),
+      cameraMotionProfileDuration("responsive"),
     );
 
     const settled = sampleCameraModeTransition(

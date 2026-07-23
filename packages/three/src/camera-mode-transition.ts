@@ -1,10 +1,9 @@
-export type PrototypeCameraMotionProfile = "responsive" | "smooth" | "spring";
+export type PrototypeCameraMotionProfile = "responsive" | "spring";
 
 const PROFILE_DURATION_MS: Readonly<
   Record<PrototypeCameraMotionProfile, number>
 > = {
   responsive: 440,
-  smooth: 550,
   spring: 650,
 };
 
@@ -108,15 +107,11 @@ export function sampleCameraMotionProfile(
     return 1;
   }
 
-  if (profile === "responsive") {
-    return 1 - (1 - progress) ** 4;
-  }
-
   if (profile === "spring") {
     return sampleSpring(progress);
   }
 
-  return (1 - Math.cos(Math.PI * progress)) / 2;
+  return 1 - (1 - progress) ** 4;
 }
 
 function sampleCameraMotionProfileDerivative(
@@ -127,10 +122,6 @@ function sampleCameraMotionProfileDerivative(
     return 0;
   }
 
-  if (profile === "responsive") {
-    return 4 * (1 - progress) ** 3;
-  }
-
   if (profile === "spring") {
     return (
       sampleRawSpringDerivative(progress) +
@@ -138,7 +129,7 @@ function sampleCameraMotionProfileDerivative(
     );
   }
 
-  return (Math.PI / 2) * Math.sin(Math.PI * progress);
+  return 4 * (1 - progress) ** 3;
 }
 
 export function beginCameraModeTransition(

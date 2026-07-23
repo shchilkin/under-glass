@@ -117,7 +117,7 @@ function prototypeMotionProfile(
 ): PrototypeCameraMotionProfile {
   const profile = container.dataset.underGlassPrototypeMotionProfile;
 
-  return profile === "responsive" || profile === "spring" ? profile : "smooth";
+  return profile === "spring" ? profile : "responsive";
 }
 
 function addAssetPlaceholders(

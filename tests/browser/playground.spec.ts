@@ -250,7 +250,7 @@ test("renders the canonical project graph in both camera modes", async ({
 test("retargets an active Camera Mode Transition to the latest requested mode", async ({
   page,
 }) => {
-  await page.goto("/?scenario=graph&motion=smooth");
+  await page.goto("/?scenario=graph&motion=responsive");
   await expect(
     page.getByText("loading → ready", { exact: true }),
   ).toBeVisible();
@@ -264,7 +264,7 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
 
   await expect(scene).toHaveAttribute(
     "data-under-glass-prototype-motion-profile",
-    "smooth",
+    "responsive",
   );
   await expect(scene).toHaveAttribute(
     "data-under-glass-camera-transition",
@@ -340,7 +340,9 @@ test("compares prototype motion profiles without recreating the scene", async ({
     name: "Responsive",
     exact: true,
   });
+  const smooth = page.getByRole("button", { name: "Smooth", exact: true });
 
+  await expect(smooth).toHaveCount(0);
   await expect(spring).toHaveAttribute("aria-pressed", "true");
   await expect(scene).toHaveAttribute(
     "data-under-glass-prototype-motion-profile",
@@ -359,4 +361,21 @@ test("compares prototype motion profiles without recreating the scene", async ({
     .poll(() => new URL(page.url()).searchParams.get("motion"))
     .toBe("responsive");
   await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
+});
+
+test("normalizes the retired Smooth profile to Responsive", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=graph&motion=smooth");
+
+  await expect(
+    page.getByRole("button", { name: "Responsive", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
+    "data-under-glass-prototype-motion-profile",
+    "responsive",
+  );
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("motion"))
+    .toBe("responsive");
 });
