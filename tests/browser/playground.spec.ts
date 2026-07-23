@@ -1,4 +1,54 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+
+interface SceneColorCounts {
+  readonly asset: number;
+  readonly placeholder: number;
+}
+
+async function sceneColorCounts(canvas: Locator): Promise<SceneColorCounts> {
+  const screenshot = await canvas.screenshot();
+  const dataUrl = `data:image/png;base64,${screenshot.toString("base64")}`;
+
+  return canvas.evaluate(async (_element, screenshotUrl) => {
+    const image = new Image();
+    image.src = screenshotUrl;
+    await image.decode();
+    const copy = document.createElement("canvas");
+    copy.width = image.naturalWidth;
+    copy.height = image.naturalHeight;
+    const context = copy.getContext("2d");
+
+    if (context === null) {
+      throw new Error("A 2D canvas context could not be created.");
+    }
+
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, copy.width, copy.height).data;
+    let asset = 0;
+    let placeholder = 0;
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const red = pixels[index] ?? 0;
+      const green = pixels[index + 1] ?? 0;
+      const blue = pixels[index + 2] ?? 0;
+
+      placeholder += Number(
+        Math.min(
+          red - 140,
+          green - 80,
+          red - green * 1.15,
+          green - blue * 1.15,
+        ) > 0,
+      );
+      asset += Number(
+        Math.min(blue - 110, green - 100, blue - red * 1.3, green - red * 1.3) >
+          0,
+      );
+    }
+
+    return { asset, placeholder };
+  }, dataUrl);
+}
 
 test("renders a host-resolved GLB through the public renderer boundary", async ({
   page,
@@ -57,15 +107,20 @@ test("replaces progressive Placeholders without waiting for slower Nodes", async
 
   await expect(page.getByText("loading", { exact: true })).toBeVisible();
   const canvas = page.locator("canvas[data-under-glass-renderer]");
-  const progressiveFrame = await canvas.screenshot();
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("2");
+  await expect
+    .poll(async () => (await sceneColorCounts(canvas)).asset)
+    .toBeGreaterThan(50);
+  await expect
+    .poll(async () => (await sceneColorCounts(canvas)).placeholder)
+    .toBeGreaterThan(50);
 
   await expect(
     page.getByText("loading → ready", { exact: true }),
   ).toBeVisible();
-  const completedFrame = await canvas.screenshot();
-
-  expect(progressiveFrame.equals(completedFrame)).toBe(false);
-  await expect(page.getByTestId("asset-resolve-count")).toHaveText("2");
+  await expect
+    .poll(async () => (await sceneColorCounts(canvas)).placeholder)
+    .toBeLessThan(10);
 });
 
 for (const failure of ["missing", "malformed", "compressed"] as const) {
@@ -84,6 +139,11 @@ for (const failure of ["missing", "malformed", "compressed"] as const) {
     await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
       1,
     );
+    const canvas = page.locator("canvas[data-under-glass-renderer]");
+    const colors = await sceneColorCounts(canvas);
+
+    expect(colors.asset).toBeGreaterThan(50);
+    expect(colors.placeholder).toBeGreaterThan(50);
   });
 }
 

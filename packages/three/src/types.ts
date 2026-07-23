@@ -12,7 +12,6 @@ export type SceneRendererDiagnosticCode =
   | "node-outside-group-bounds"
   | "renderer-unavailable"
   | "unsupported-connections"
-  | "unsupported-node-count"
   | "visualization-invalid";
 
 export interface SceneRendererDiagnostic {
