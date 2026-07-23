@@ -10,6 +10,9 @@ export default defineConfig({
       "@under-glass/core": fileURLToPath(
         new URL("../../packages/core/src/index.ts", import.meta.url),
       ),
+      "@under-glass/three": fileURLToPath(
+        new URL("../../packages/three/src/index.ts", import.meta.url),
+      ),
     },
   },
 });

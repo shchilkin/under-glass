@@ -30,8 +30,8 @@ body {
 }
 
 main {
-  width: min(720px, 100%);
-  padding: clamp(32px, 7vw, 72px);
+  width: min(920px, 100%);
+  padding: clamp(28px, 5vw, 56px);
   border: 1px solid rgb(233 239 235 / 14%);
   border-radius: 28px;
   background:
@@ -58,10 +58,20 @@ h1 {
 
 .lede {
   max-width: 34rem;
-  margin: 32px 0 48px;
+  margin: 24px 0 32px;
   color: #aab7b0;
   font-size: clamp(1.1rem, 2vw, 1.35rem);
   line-height: 1.55;
+}
+
+.scene {
+  width: 100%;
+  height: clamp(280px, 42vw, 440px);
+  margin-bottom: 24px;
+  overflow: hidden;
+  border: 1px solid rgb(233 239 235 / 10%);
+  border-radius: 18px;
+  background: #111816;
 }
 
 dl {
@@ -89,6 +99,25 @@ dt {
 dd {
   margin: 0;
   font-size: 0.9rem;
+}
+
+ul[aria-label="Renderer diagnostics"] {
+  margin: 20px 0 0;
+  padding: 16px 16px 16px 36px;
+  border: 1px solid rgb(236 119 95 / 35%);
+  border-radius: 14px;
+  color: #f0a693;
+  background: rgb(83 24 17 / 25%);
+}
+
+ul[aria-label="Renderer diagnostics"] li {
+  display: grid;
+  gap: 6px;
+}
+
+ul[aria-label="Renderer diagnostics"] code {
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 @media (max-width: 560px) {
