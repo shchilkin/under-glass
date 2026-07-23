@@ -5,6 +5,7 @@ import {
   safeParsePersistedContract,
   type StructuralParseResult,
 } from "./structural-validation.js";
+import { groundCoordinatesSchema, groundRectangleSchema } from "./geometry.js";
 
 export const ASSET_DEFINITION_SCHEMA_VERSION: 1 = 1;
 
@@ -21,16 +22,8 @@ const assetLocalPointSchema: z.ZodObject<
   z: z.number().finite(),
 });
 
-const groundNormalSchema: z.ZodObject<
-  {
-    x: z.ZodNumber;
-    z: z.ZodNumber;
-  },
-  z.core.$strict
-> = z.strictObject({
-  x: z.number().finite(),
-  z: z.number().finite(),
-});
+const groundNormalSchema: typeof groundCoordinatesSchema =
+  groundCoordinatesSchema;
 
 const quaternionSchema: z.ZodObject<
   {
@@ -47,20 +40,8 @@ const quaternionSchema: z.ZodObject<
   w: z.number().finite(),
 });
 
-const assetFootprintSchema: z.ZodObject<
-  {
-    minX: z.ZodNumber;
-    minZ: z.ZodNumber;
-    maxX: z.ZodNumber;
-    maxZ: z.ZodNumber;
-  },
-  z.core.$strict
-> = z.strictObject({
-  minX: z.number().finite(),
-  minZ: z.number().finite(),
-  maxX: z.number().finite(),
-  maxZ: z.number().finite(),
-});
+const assetFootprintSchema: typeof groundRectangleSchema =
+  groundRectangleSchema;
 
 const assetProvenanceSchema: z.ZodObject<
   {

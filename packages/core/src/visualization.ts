@@ -5,6 +5,7 @@ import {
   safeParsePersistedContract,
   type StructuralParseResult,
 } from "./structural-validation.js";
+import { groundCoordinatesSchema, groundRectangleSchema } from "./geometry.js";
 
 export const CURRENT_SCHEMA_VERSION: 1 = 1;
 
@@ -34,31 +35,10 @@ const quarterTurnsSchema: z.ZodType<0 | 1 | 2 | 3> = z.union([
   z.literal(3),
 ]);
 
-const groundPointSchema: z.ZodObject<
-  {
-    x: z.ZodNumber;
-    z: z.ZodNumber;
-  },
-  z.core.$strict
-> = z.strictObject({
-  x: z.number().finite(),
-  z: z.number().finite(),
-});
+const groundPointSchema: typeof groundCoordinatesSchema =
+  groundCoordinatesSchema;
 
-const groundBoundsSchema: z.ZodObject<
-  {
-    minX: z.ZodNumber;
-    minZ: z.ZodNumber;
-    maxX: z.ZodNumber;
-    maxZ: z.ZodNumber;
-  },
-  z.core.$strict
-> = z.strictObject({
-  minX: z.number().finite(),
-  minZ: z.number().finite(),
-  maxX: z.number().finite(),
-  maxZ: z.number().finite(),
-});
+const groundBoundsSchema: typeof groundRectangleSchema = groundRectangleSchema;
 
 const sourceReferenceSchema: z.ZodObject<
   {

@@ -44,68 +44,28 @@ function formatPath(path: DiagnosticPath): string {
   return path.length === 0 ? "<root>" : path.join(".");
 }
 
-function findNonJsonValue(
-  input: unknown,
-  path: DiagnosticPath = [],
-  ancestors: WeakSet<object> = new WeakSet(),
-): DiagnosticPath | null {
-  if (
+function isJsonPrimitive(input: unknown): boolean {
+  return (
     input === null ||
     typeof input === "boolean" ||
-    typeof input === "string"
-  ) {
-    return null;
-  }
+    typeof input === "string" ||
+    (typeof input === "number" && Number.isFinite(input))
+  );
+}
 
-  if (typeof input === "number") {
-    return Number.isFinite(input) ? null : path;
-  }
-
-  if (typeof input !== "object") {
-    return path;
-  }
-
-  if (ancestors.has(input)) {
-    return path;
-  }
-
-  ancestors.add(input);
-
-  if (Array.isArray(input)) {
-    for (let index = 0; index < input.length; index += 1) {
-      if (!Object.hasOwn(input, index)) {
-        return [...path, index];
-      }
-
-      const invalidPath = findNonJsonValue(
-        input[index],
-        [...path, index],
-        ancestors,
-      );
-
-      if (invalidPath !== null) {
-        return invalidPath;
-      }
-    }
-
-    ancestors.delete(input);
-    return null;
-  }
-
-  const prototype = Object.getPrototypeOf(input) as object | null;
-
-  if (prototype !== Object.prototype && prototype !== null) {
-    return path;
-  }
-
-  for (const key of Reflect.ownKeys(input)) {
-    if (typeof key === "symbol") {
-      return [...path, key.description ?? "<symbol>"];
+function findNonJsonArrayValue(
+  input: unknown[],
+  path: DiagnosticPath,
+  ancestors: WeakSet<object>,
+): DiagnosticPath | null {
+  for (let index = 0; index < input.length; index += 1) {
+    if (!Object.hasOwn(input, index)) {
+      return [...path, index];
     }
 
     const invalidPath = findNonJsonValue(
-      (input as Record<string, unknown>)[key],
-      [...path, key],
+      input[index],
+      [...path, index],
       ancestors,
     );
 
@@ -114,8 +74,73 @@ function findNonJsonValue(
     }
   }
 
-  ancestors.delete(input);
   return null;
+}
+
+function findNonJsonObjectValue(
+  input: object,
+  path: DiagnosticPath,
+  ancestors: WeakSet<object>,
+): DiagnosticPath | null {
+  const prototype = Object.getPrototypeOf(input) as object | null;
+
+  if (prototype !== Object.prototype && prototype !== null) {
+    return path;
+  }
+
+  for (const key of Reflect.ownKeys(input)) {
+    const propertyPath = [
+      ...path,
+      typeof key === "symbol" ? (key.description ?? "<symbol>") : key,
+    ];
+
+    if (typeof key === "symbol") {
+      return propertyPath;
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(input, key);
+
+    if (descriptor === undefined || !("value" in descriptor)) {
+      return propertyPath;
+    }
+
+    const invalidPath = findNonJsonValue(
+      descriptor.value,
+      propertyPath,
+      ancestors,
+    );
+
+    if (invalidPath !== null) {
+      return invalidPath;
+    }
+  }
+
+  return null;
+}
+
+function findNonJsonValue(
+  input: unknown,
+  path: DiagnosticPath = [],
+  ancestors: WeakSet<object> = new WeakSet(),
+): DiagnosticPath | null {
+  if (isJsonPrimitive(input)) {
+    return null;
+  }
+
+  if (typeof input !== "object" || input === null) {
+    return path;
+  }
+
+  if (ancestors.has(input)) {
+    return path;
+  }
+
+  ancestors.add(input);
+  const invalidPath = Array.isArray(input)
+    ? findNonJsonArrayValue(input, path, ancestors)
+    : findNonJsonObjectValue(input, path, ancestors);
+  ancestors.delete(input);
+  return invalidPath;
 }
 
 function toDiagnosticPath(path: readonly PropertyKey[]): DiagnosticPath {
