@@ -263,7 +263,7 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
   const top = page.getByRole("button", { name: "Top", exact: true });
 
   await expect(scene).toHaveAttribute(
-    "data-under-glass-prototype-motion-profile",
+    "data-under-glass-camera-motion",
     "responsive",
   );
   await expect(scene).toHaveAttribute(
@@ -326,7 +326,7 @@ test("applies Camera Mode changes immediately when reduced motion is requested",
   );
 });
 
-test("compares prototype motion profiles without recreating the scene", async ({
+test("selects a supported Camera Motion without recreating the scene", async ({
   page,
 }) => {
   await page.goto("/?scenario=graph&motion=spring");
@@ -342,10 +342,11 @@ test("compares prototype motion profiles without recreating the scene", async ({
   });
   const smooth = page.getByRole("button", { name: "Smooth", exact: true });
 
+  await expect(page.getByText("Camera motion", { exact: true })).toBeVisible();
   await expect(smooth).toHaveCount(0);
   await expect(spring).toHaveAttribute("aria-pressed", "true");
   await expect(scene).toHaveAttribute(
-    "data-under-glass-prototype-motion-profile",
+    "data-under-glass-camera-motion",
     "spring",
   );
   await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
@@ -354,7 +355,7 @@ test("compares prototype motion profiles without recreating the scene", async ({
 
   await expect(responsive).toHaveAttribute("aria-pressed", "true");
   await expect(scene).toHaveAttribute(
-    "data-under-glass-prototype-motion-profile",
+    "data-under-glass-camera-motion",
     "responsive",
   );
   await expect
@@ -372,7 +373,7 @@ test("normalizes the retired Smooth profile to Responsive", async ({
     page.getByRole("button", { name: "Responsive", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
-    "data-under-glass-prototype-motion-profile",
+    "data-under-glass-camera-motion",
     "responsive",
   );
   await expect

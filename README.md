@@ -23,3 +23,23 @@ npm install
 npm run dev
 npm run check
 ```
+
+## Camera motion
+
+The renderer supports two named transitions between isometric and top views:
+`responsive` (the default) and `spring`.
+
+```ts
+const renderer = createSceneRenderer({
+  cameraMotion: "spring",
+  container,
+  resolveAsset,
+  visualization,
+});
+
+renderer.setCameraMotion("responsive");
+```
+
+The future React Viewer exposes the same choice as its
+`cameraMotion="responsive" | "spring"` prop. Hosts choose a supported motion
+character rather than supplying arbitrary durations or easing curves.

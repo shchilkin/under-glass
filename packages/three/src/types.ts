@@ -33,7 +33,10 @@ export interface ResolvedAsset {
 
 export type AssetResolver = (assetId: string) => Promise<ResolvedAsset>;
 
+export type CameraMotion = "responsive" | "spring";
+
 export interface CreateSceneRendererOptions {
+  readonly cameraMotion?: CameraMotion;
   readonly container: HTMLElement;
   readonly resolveAsset: AssetResolver;
   readonly visualization: Visualization;
@@ -46,6 +49,7 @@ export interface SetCameraModeOptions {
 export interface SceneRenderer {
   dispose(): void;
   getSnapshot(): SceneRendererSnapshot;
+  setCameraMotion(cameraMotion: CameraMotion): void;
   setCameraMode(
     cameraMode: OpeningView["cameraMode"],
     options?: SetCameraModeOptions,

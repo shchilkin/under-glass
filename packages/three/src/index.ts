@@ -2,6 +2,7 @@ export { createSceneRenderer } from "./scene-renderer.js";
 
 export {
   type AssetResolver,
+  type CameraMotion,
   type CreateSceneRendererOptions,
   type ResolvedAsset,
   type SceneRenderer,

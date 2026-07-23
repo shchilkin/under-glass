@@ -9,6 +9,7 @@ import {
 } from "@under-glass/core";
 import {
   createSceneRenderer,
+  type CameraMotion,
   type ResolvedAsset,
   type SceneRenderer,
   type SceneRendererSnapshot,
@@ -20,27 +21,21 @@ import { PROJECT_GRAPH_VISUALIZATION } from "./project-graph-fixture.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
-type PrototypeCameraMotionProfile = "responsive" | "spring";
 const showConnection = searchParameters.has("connections");
 const scenario = searchParameters.get("scenario") ?? "single";
-const MOTION_PROFILES: readonly PrototypeCameraMotionProfile[] = [
-  "responsive",
-  "spring",
-];
-const requestedMotionProfile = searchParameters.get("motion");
-const initialMotionProfile: PrototypeCameraMotionProfile =
-  requestedMotionProfile !== null &&
-  MOTION_PROFILES.includes(
-    requestedMotionProfile as PrototypeCameraMotionProfile,
-  )
-    ? (requestedMotionProfile as PrototypeCameraMotionProfile)
+const CAMERA_MOTIONS: readonly CameraMotion[] = ["responsive", "spring"];
+const requestedCameraMotion = searchParameters.get("motion");
+const initialCameraMotion: CameraMotion =
+  requestedCameraMotion !== null &&
+  CAMERA_MOTIONS.includes(requestedCameraMotion as CameraMotion)
+    ? (requestedCameraMotion as CameraMotion)
     : "responsive";
 
 if (
-  requestedMotionProfile !== null &&
-  requestedMotionProfile !== initialMotionProfile
+  requestedCameraMotion !== null &&
+  requestedCameraMotion !== initialCameraMotion
 ) {
-  searchParameters.set("motion", initialMotionProfile);
+  searchParameters.set("motion", initialCameraMotion);
   window.history.replaceState(
     null,
     "",
@@ -48,11 +43,8 @@ if (
   );
 }
 
-const MOTION_PROFILE_COPY: Readonly<
-  Record<
-    PrototypeCameraMotionProfile,
-    { readonly description: string; readonly label: string }
-  >
+const CAMERA_MOTION_COPY: Readonly<
+  Record<CameraMotion, { readonly description: string; readonly label: string }>
 > = {
   responsive: {
     description: "440 ms · strong ease-out",
@@ -272,8 +264,8 @@ function App() {
   const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
     demoVisualization.openingView.cameraMode,
   );
-  const [motionProfile, setMotionProfile] =
-    useState<PrototypeCameraMotionProfile>(initialMotionProfile);
+  const [cameraMotion, setCameraMotion] =
+    useState<CameraMotion>(initialCameraMotion);
   const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([]);
   const [assetResolveCount, setAssetResolveCount] = useState(0);
 
@@ -285,6 +277,7 @@ function App() {
     }
 
     const renderer = createSceneRenderer({
+      cameraMotion: initialCameraMotion,
       container,
       resolveAsset: async (assetId) => {
         setAssetResolveCount((count) => count + 1);
@@ -314,22 +307,19 @@ function App() {
   }, [cameraMode]);
 
   useEffect(() => {
-    if (sceneContainerRef.current !== null) {
-      sceneContainerRef.current.dataset.underGlassPrototypeMotionProfile =
-        motionProfile;
-    }
-  }, [motionProfile]);
+    rendererRef.current?.setCameraMotion(cameraMotion);
+  }, [cameraMotion]);
 
-  const selectMotionProfile = (profile: PrototypeCameraMotionProfile): void => {
+  const selectCameraMotion = (motion: CameraMotion): void => {
     const nextSearchParameters = new URLSearchParams(window.location.search);
 
-    nextSearchParameters.set("motion", profile);
+    nextSearchParameters.set("motion", motion);
     window.history.replaceState(
       null,
       "",
       `${window.location.pathname}?${nextSearchParameters.toString()}`,
     );
-    setMotionProfile(profile);
+    setCameraMotion(motion);
   };
 
   return (
@@ -343,22 +333,22 @@ function App() {
       </p>
       <div className="scene-controls">
         <div className="motion-lab">
-          <span className="control-label">Motion prototype</span>
+          <span className="control-label">Camera motion</span>
           <div aria-label="Camera motion profile" className="motion-profile">
-            {MOTION_PROFILES.map((profile) => (
+            {CAMERA_MOTIONS.map((motion) => (
               <button
-                aria-label={MOTION_PROFILE_COPY[profile].label}
-                aria-pressed={motionProfile === profile}
-                key={profile}
-                onClick={() => selectMotionProfile(profile)}
+                aria-label={CAMERA_MOTION_COPY[motion].label}
+                aria-pressed={cameraMotion === motion}
+                key={motion}
+                onClick={() => selectCameraMotion(motion)}
                 type="button"
               >
-                {MOTION_PROFILE_COPY[profile].label}
+                {CAMERA_MOTION_COPY[motion].label}
               </button>
             ))}
           </div>
           <span className="motion-description">
-            {MOTION_PROFILE_COPY[motionProfile].description}
+            {CAMERA_MOTION_COPY[cameraMotion].description}
           </span>
         </div>
         <div aria-label="Camera mode" className="camera-mode">

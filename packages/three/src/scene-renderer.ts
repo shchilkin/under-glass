@@ -51,7 +51,6 @@ import {
   beginCameraModeTransition,
   sampleCameraModeTransition,
   type CameraModeTransition,
-  type PrototypeCameraMotionProfile,
 } from "./camera-mode-transition.js";
 import {
   applyOpeningViewTransition,
@@ -68,6 +67,7 @@ import {
 } from "./scene-graph.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
 import type {
+  CameraMotion,
   CreateSceneRendererOptions,
   SceneRenderer,
   SceneRendererDiagnostic,
@@ -77,6 +77,7 @@ interface RenderingSurface {
   readonly camera: OrthographicCamera;
   readonly canvas: HTMLCanvasElement;
   animationFrameId: number | null;
+  cameraMotion: CameraMotion;
   cameraMode: CameraMode;
   readonly cameraPoses: OpeningViewCameraPoses;
   cameraProgress: number;
@@ -110,14 +111,6 @@ interface NodeLoadContext {
   readonly options: CreateSceneRendererOptions;
   readonly session: RendererSession;
   readonly surface: RenderingSurface;
-}
-
-function prototypeMotionProfile(
-  container: HTMLElement,
-): PrototypeCameraMotionProfile {
-  const profile = container.dataset.underGlassPrototypeMotionProfile;
-
-  return profile === "spring" ? profile : "responsive";
 }
 
 function addAssetPlaceholders(
@@ -282,7 +275,7 @@ function startCameraModeTransition(
   surface.cameraTransition = beginCameraModeTransition({
     from: surface.cameraProgress,
     now,
-    profile: prototypeMotionProfile(surface.container),
+    profile: surface.cameraMotion,
     to: cameraMode === "top" ? 1 : 0,
     velocity: surface.cameraVelocity,
   });
@@ -301,6 +294,7 @@ function startCameraModeTransition(
 function createRenderingSurface(
   container: HTMLElement,
   visualization: Visualization,
+  cameraMotion: CameraMotion,
 ): RenderingSurface {
   const canvas = document.createElement("canvas");
   const webGlRenderer = new WebGLRenderer({
@@ -356,12 +350,14 @@ function createRenderingSurface(
   scene.add(fillLight);
 
   container.dataset.underGlassCameraMode = visualization.openingView.cameraMode;
+  container.dataset.underGlassCameraMotion = cameraMotion;
   container.dataset.underGlassCameraTransition = "idle";
 
   const surface: RenderingSurface = {
     animationFrameId: null,
     camera,
     canvas,
+    cameraMotion,
     cameraMode: visualization.openingView.cameraMode,
     cameraPoses,
     cameraProgress,
@@ -655,6 +651,7 @@ function startSceneRendering(
     const surface = createRenderingSurface(
       options.container,
       options.visualization,
+      options.cameraMotion ?? "responsive",
     );
     const recoverableDiagnostics = diagnosticsWithSeverity(
       diagnostics,
@@ -713,6 +710,16 @@ function createSceneRendererHandle(
       disposeRendererSession(store, session);
     },
     getSnapshot: store.getSnapshot,
+    setCameraMotion(cameraMotion: CameraMotion): void {
+      const surface = session.surface;
+
+      if (session.disposed || surface === null) {
+        return;
+      }
+
+      surface.cameraMotion = cameraMotion;
+      surface.container.dataset.underGlassCameraMotion = cameraMotion;
+    },
     setCameraMode(cameraMode: CameraMode, options): void {
       const surface = session.surface;
 

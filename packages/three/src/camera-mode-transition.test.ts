@@ -5,17 +5,17 @@ import {
   cameraMotionProfileDuration,
   sampleCameraModeTransition,
   sampleCameraMotionProfile,
-  type PrototypeCameraMotionProfile,
 } from "./camera-mode-transition.js";
+import type { CameraMotion } from "./types.js";
 
-describe("Camera Mode Transition profiles", () => {
-  it("gives each prototype profile its deliberately tuned duration", () => {
+describe("Camera Motion profiles", () => {
+  it("gives each supported profile its deliberately tuned duration", () => {
     expect(cameraMotionProfileDuration("responsive")).toBe(440);
     expect(cameraMotionProfileDuration("spring")).toBe(650);
   });
 
   it("keeps exact endpoints while giving each profile a distinct midpoint", () => {
-    const profiles: PrototypeCameraMotionProfile[] = ["responsive", "spring"];
+    const profiles: CameraMotion[] = ["responsive", "spring"];
 
     for (const profile of profiles) {
       expect(sampleCameraMotionProfile(profile, 0)).toBe(0);

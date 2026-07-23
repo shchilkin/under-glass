@@ -1,8 +1,6 @@
-export type PrototypeCameraMotionProfile = "responsive" | "spring";
+import type { CameraMotion } from "./types.js";
 
-const PROFILE_DURATION_MS: Readonly<
-  Record<PrototypeCameraMotionProfile, number>
-> = {
+const PROFILE_DURATION_MS: Readonly<Record<CameraMotion, number>> = {
   responsive: 440,
   spring: 650,
 };
@@ -14,7 +12,7 @@ export interface CameraModeTransition {
   readonly duration: number;
   readonly from: number;
   readonly initialVelocity: number;
-  readonly profile: PrototypeCameraMotionProfile;
+  readonly profile: CameraMotion;
   readonly startedAt: number;
   readonly to: number;
   readonly velocityPreserving: boolean;
@@ -29,14 +27,12 @@ export interface CameraModeTransitionSample {
 interface BeginCameraModeTransitionOptions {
   readonly from: number;
   readonly now: number;
-  readonly profile: PrototypeCameraMotionProfile;
+  readonly profile: CameraMotion;
   readonly to: number;
   readonly velocity: number;
 }
 
-export function cameraMotionProfileDuration(
-  profile: PrototypeCameraMotionProfile,
-): number {
+export function cameraMotionProfileDuration(profile: CameraMotion): number {
   return PROFILE_DURATION_MS[profile];
 }
 
@@ -96,7 +92,7 @@ function sampleSpring(progress: number): number {
 }
 
 export function sampleCameraMotionProfile(
-  profile: PrototypeCameraMotionProfile,
+  profile: CameraMotion,
   progress: number,
 ): number {
   if (progress <= 0) {
@@ -115,7 +111,7 @@ export function sampleCameraMotionProfile(
 }
 
 function sampleCameraMotionProfileDerivative(
-  profile: PrototypeCameraMotionProfile,
+  profile: CameraMotion,
   progress: number,
 ): number {
   if (progress <= 0 || progress >= 1) {
