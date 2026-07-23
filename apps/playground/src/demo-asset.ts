@@ -28,6 +28,39 @@ function decodeBase64(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+export function markDemoGlbAsCompressed(bytes: ArrayBuffer): ArrayBuffer {
+  const source = new Uint8Array(bytes);
+  const sourceView = new DataView(bytes);
+  const jsonLength = sourceView.getUint32(12, true);
+  const jsonStart = 20;
+  const jsonEnd = jsonStart + jsonLength;
+  const jsonText = new TextDecoder()
+    .decode(source.subarray(jsonStart, jsonEnd))
+    .trimEnd();
+  const gltf = JSON.parse(jsonText) as Record<string, unknown>;
+  const compressionExtension = "KHR_draco_mesh_compression";
+
+  gltf.extensionsUsed = [compressionExtension];
+  gltf.extensionsRequired = [compressionExtension];
+
+  const encodedJson = new TextEncoder().encode(JSON.stringify(gltf));
+  const paddedJsonLength = Math.ceil(encodedJson.length / 4) * 4;
+  const trailingChunks = source.subarray(jsonEnd);
+  const output = new Uint8Array(
+    20 + paddedJsonLength + trailingChunks.byteLength,
+  );
+  const outputView = new DataView(output.buffer);
+
+  output.set(source.subarray(0, 12), 0);
+  outputView.setUint32(8, output.byteLength, true);
+  outputView.setUint32(12, paddedJsonLength, true);
+  outputView.setUint32(16, 0x4e4f534a, true);
+  output.fill(0x20, jsonStart, jsonStart + paddedJsonLength);
+  output.set(encodedJson, jsonStart);
+  output.set(trailingChunks, jsonStart + paddedJsonLength);
+  return output.buffer;
+}
+
 export async function resolveDemoAsset(
   assetId: string,
 ): Promise<ResolvedAsset> {

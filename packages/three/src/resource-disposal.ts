@@ -81,6 +81,10 @@ function disposeObjectResource(
 }
 
 export function disposeObjectResources(root: Object3D): void {
+  disposeObjectResourceRoots([root]);
+}
+
+export function disposeObjectResourceRoots(roots: Iterable<Object3D>): void {
   const registry: DisposalRegistry = {
     geometries: new Set(),
     materials: new Set(),
@@ -88,7 +92,9 @@ export function disposeObjectResources(root: Object3D): void {
     textures: new Set(),
   };
 
-  root.traverse((object) => {
-    disposeObjectResource(object, registry);
-  });
+  for (const root of roots) {
+    root.traverse((object) => {
+      disposeObjectResource(object, registry);
+    });
+  }
 }
