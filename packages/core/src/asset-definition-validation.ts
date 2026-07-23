@@ -1,5 +1,5 @@
 import type { AssetDefinition } from "./asset-definition.js";
-import type { DiagnosticSeverity } from "./semantic-validation.js";
+import type { DiagnosticPath, DiagnosticSeverity } from "./diagnostics.js";
 
 export type AssetDefinitionDiagnosticCode =
   | "duplicate-connection-port-id"
@@ -7,7 +7,7 @@ export type AssetDefinitionDiagnosticCode =
   | "invalid-footprint"
   | "non-unit-connection-port-normal"
   | "non-unit-normalization-rotation";
-export type AssetDefinitionDiagnosticPath = readonly (number | string)[];
+export type AssetDefinitionDiagnosticPath = DiagnosticPath;
 
 export interface AssetDefinitionDiagnostic {
   readonly code: AssetDefinitionDiagnosticCode;

@@ -1,8 +1,14 @@
 import { z } from "zod";
 
+import {
+  parsePersistedContract,
+  safeParsePersistedContract,
+  type StructuralParseResult,
+} from "./structural-validation.js";
+
 export const ASSET_DEFINITION_SCHEMA_VERSION: 1 = 1;
 
-const assetPointSchema: z.ZodObject<
+const assetLocalPointSchema: z.ZodObject<
   {
     x: z.ZodNumber;
     y: z.ZodNumber;
@@ -74,13 +80,13 @@ const assetProvenanceSchema: z.ZodObject<
 const connectionPortSchema: z.ZodObject<
   {
     id: z.ZodString;
-    position: typeof assetPointSchema;
+    position: typeof assetLocalPointSchema;
     normal: typeof groundNormalSchema;
   },
   z.core.$strict
 > = z.strictObject({
   id: z.string().min(1),
-  position: assetPointSchema,
+  position: assetLocalPointSchema,
   normal: groundNormalSchema,
 });
 
@@ -90,7 +96,7 @@ export const assetDefinitionSchema: z.ZodObject<
     assetId: z.ZodString;
     scale: z.ZodNumber;
     normalizationRotation: typeof quaternionSchema;
-    groundContact: typeof assetPointSchema;
+    groundContact: typeof assetLocalPointSchema;
     footprint: typeof assetFootprintSchema;
     provenance: typeof assetProvenanceSchema;
     connectionPorts: z.ZodOptional<z.ZodArray<typeof connectionPortSchema>>;
@@ -101,7 +107,7 @@ export const assetDefinitionSchema: z.ZodObject<
   assetId: z.string().min(1),
   scale: z.number().positive().finite(),
   normalizationRotation: quaternionSchema,
-  groundContact: assetPointSchema,
+  groundContact: assetLocalPointSchema,
   footprint: assetFootprintSchema,
   provenance: assetProvenanceSchema,
   connectionPorts: z.array(connectionPortSchema).optional(),
@@ -109,18 +115,26 @@ export const assetDefinitionSchema: z.ZodObject<
 
 export type AssetDefinition = z.output<typeof assetDefinitionSchema>;
 export type AssetFootprint = z.output<typeof assetFootprintSchema>;
-export type AssetPoint = z.output<typeof assetPointSchema>;
+export type AssetLocalPoint = z.output<typeof assetLocalPointSchema>;
 export type AssetProvenance = z.output<typeof assetProvenanceSchema>;
 export type ConnectionPort = z.output<typeof connectionPortSchema>;
 export type GroundNormal = z.output<typeof groundNormalSchema>;
 export type Quaternion = z.output<typeof quaternionSchema>;
 
 export function parseAssetDefinition(input: unknown): AssetDefinition {
-  return assetDefinitionSchema.parse(input);
+  return parsePersistedContract(input, assetDefinitionSchema, {
+    currentSchemaVersion: ASSET_DEFINITION_SCHEMA_VERSION,
+    kind: "asset-definition",
+    label: "Asset Definition",
+  });
 }
 
 export function safeParseAssetDefinition(
   input: unknown,
-): z.ZodSafeParseResult<AssetDefinition> {
-  return assetDefinitionSchema.safeParse(input);
+): StructuralParseResult<AssetDefinition> {
+  return safeParsePersistedContract(input, assetDefinitionSchema, {
+    currentSchemaVersion: ASSET_DEFINITION_SCHEMA_VERSION,
+    kind: "asset-definition",
+    label: "Asset Definition",
+  });
 }

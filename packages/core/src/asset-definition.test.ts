@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseAssetDefinition,
+  safeParseAssetDefinition,
   validateAssetDefinitionSemantics,
 } from "./index.js";
 
@@ -32,7 +33,7 @@ describe("parseAssetDefinition", () => {
     expect(parseAssetDefinition(input)).toEqual(input);
   });
 
-  it("rejects non-document and unsupported future inputs", () => {
+  it("rejects non-Asset Definition and unsupported future inputs", () => {
     expect(() => parseAssetDefinition("not-an-asset-definition")).toThrow();
     expect(() =>
       parseAssetDefinition({
@@ -62,6 +63,36 @@ describe("parseAssetDefinition", () => {
         provenance: { license: "CC0-1.0" },
       }),
     ).toThrow();
+  });
+
+  it("reports an explicitly present undefined optional field as non-JSON", () => {
+    expect(
+      safeParseAssetDefinition({
+        schemaVersion: 1,
+        assetId: "service",
+        scale: 1,
+        normalizationRotation: { x: 0, y: 0, z: 0, w: 1 },
+        groundContact: { x: 0, y: 0, z: 0 },
+        footprint: { minX: -1, minZ: -1, maxX: 1, maxZ: 1 },
+        provenance: {
+          license: "CC0-1.0",
+          source: "https://example.com/assets/service",
+          author: undefined,
+        },
+      }),
+    ).toEqual({
+      success: false,
+      diagnostics: [
+        {
+          code: "non-json-value",
+          severity: "error",
+          entityKind: "asset-definition",
+          message:
+            'Asset Definition contains a non-JSON value at "provenance.author".',
+          path: ["provenance", "author"],
+        },
+      ],
+    });
   });
 });
 

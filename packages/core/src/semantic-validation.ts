@@ -1,6 +1,6 @@
 import type { Visualization } from "./visualization.js";
+import type { DiagnosticPath, DiagnosticSeverity } from "./diagnostics.js";
 
-export type DiagnosticSeverity = "error" | "warning";
 export type VisualizationDiagnosticCode =
   | "duplicate-id"
   | "invalid-group-bounds"
@@ -9,7 +9,7 @@ export type VisualizationDiagnosticCode =
   | "node-outside-group-bounds";
 export type VisualizationEntityKind =
   "connection" | "group" | "node" | "route-anchor";
-export type VisualizationDiagnosticPath = readonly (number | string)[];
+export type VisualizationDiagnosticPath = DiagnosticPath;
 
 export interface VisualizationDiagnostic {
   readonly code: VisualizationDiagnosticCode;
@@ -18,6 +18,29 @@ export interface VisualizationDiagnostic {
   readonly message: string;
   readonly path: VisualizationDiagnosticPath;
   readonly severity: DiagnosticSeverity;
+}
+
+function reportDuplicateId(
+  diagnostics: VisualizationDiagnostic[],
+  declaredIds: Set<string>,
+  entityId: string,
+  entityKind: VisualizationEntityKind,
+  message: string,
+  path: VisualizationDiagnosticPath,
+): void {
+  if (!declaredIds.has(entityId)) {
+    declaredIds.add(entityId);
+    return;
+  }
+
+  diagnostics.push({
+    code: "duplicate-id",
+    entityId,
+    entityKind,
+    message,
+    path,
+    severity: "error",
+  });
 }
 
 export function validateVisualizationSemantics(
@@ -31,17 +54,18 @@ export function validateVisualizationSemantics(
   const declaredConnectionIds = new Set<string>();
 
   visualization.groups.forEach((group, groupIndex) => {
-    if (groupIds.has(group.id)) {
-      diagnostics.push({
-        code: "duplicate-id",
-        entityId: group.id,
-        entityKind: "group",
-        message: `Group ID "${group.id}" is declared more than once.`,
-        path: ["groups", groupIndex, "id"],
-        severity: "error",
-      });
-    } else {
-      groupIds.add(group.id);
+    const isFirstDeclaration = !groupIds.has(group.id);
+
+    reportDuplicateId(
+      diagnostics,
+      groupIds,
+      group.id,
+      "group",
+      `Group ID "${group.id}" is declared more than once.`,
+      ["groups", groupIndex, "id"],
+    );
+
+    if (isFirstDeclaration) {
       groupsById.set(group.id, group);
     }
 
@@ -61,18 +85,14 @@ export function validateVisualizationSemantics(
   });
 
   visualization.nodes.forEach((node, nodeIndex) => {
-    if (declaredNodeIds.has(node.id)) {
-      diagnostics.push({
-        code: "duplicate-id",
-        entityId: node.id,
-        entityKind: "node",
-        message: `Node ID "${node.id}" is declared more than once.`,
-        path: ["nodes", nodeIndex, "id"],
-        severity: "error",
-      });
-    } else {
-      declaredNodeIds.add(node.id);
-    }
+    reportDuplicateId(
+      diagnostics,
+      declaredNodeIds,
+      node.id,
+      "node",
+      `Node ID "${node.id}" is declared more than once.`,
+      ["nodes", nodeIndex, "id"],
+    );
 
     if (node.groupId !== undefined && !groupIds.has(node.groupId)) {
       diagnostics.push({
@@ -106,40 +126,32 @@ export function validateVisualizationSemantics(
   });
 
   visualization.connections.forEach((connection, connectionIndex) => {
-    if (declaredConnectionIds.has(connection.id)) {
-      diagnostics.push({
-        code: "duplicate-id",
-        entityId: connection.id,
-        entityKind: "connection",
-        message: `Connection ID "${connection.id}" is declared more than once.`,
-        path: ["connections", connectionIndex, "id"],
-        severity: "error",
-      });
-    } else {
-      declaredConnectionIds.add(connection.id);
-    }
+    reportDuplicateId(
+      diagnostics,
+      declaredConnectionIds,
+      connection.id,
+      "connection",
+      `Connection ID "${connection.id}" is declared more than once.`,
+      ["connections", connectionIndex, "id"],
+    );
 
     const declaredRouteAnchorIds = new Set<string>();
 
     connection.routeAnchors.forEach((routeAnchor, routeAnchorIndex) => {
-      if (declaredRouteAnchorIds.has(routeAnchor.id)) {
-        diagnostics.push({
-          code: "duplicate-id",
-          entityId: routeAnchor.id,
-          entityKind: "route-anchor",
-          message: `Route Anchor ID "${routeAnchor.id}" is declared more than once in Connection "${connection.id}".`,
-          path: [
-            "connections",
-            connectionIndex,
-            "routeAnchors",
-            routeAnchorIndex,
-            "id",
-          ],
-          severity: "error",
-        });
-      } else {
-        declaredRouteAnchorIds.add(routeAnchor.id);
-      }
+      reportDuplicateId(
+        diagnostics,
+        declaredRouteAnchorIds,
+        routeAnchor.id,
+        "route-anchor",
+        `Route Anchor ID "${routeAnchor.id}" is declared more than once in Connection "${connection.id}".`,
+        [
+          "connections",
+          connectionIndex,
+          "routeAnchors",
+          routeAnchorIndex,
+          "id",
+        ],
+      );
     });
 
     for (const endpointName of ["source", "target"] as const) {

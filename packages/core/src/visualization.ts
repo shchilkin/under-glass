@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import {
+  parsePersistedContract,
+  safeParsePersistedContract,
+  type StructuralParseResult,
+} from "./structural-validation.js";
+
 export const CURRENT_SCHEMA_VERSION: 1 = 1;
 
 export type JsonValue =
@@ -210,11 +216,19 @@ export type SourceReference = z.output<typeof sourceReferenceSchema>;
 export type Visualization = z.output<typeof visualizationSchema>;
 
 export function parseVisualization(input: unknown): Visualization {
-  return visualizationSchema.parse(input);
+  return parsePersistedContract(input, visualizationSchema, {
+    currentSchemaVersion: CURRENT_SCHEMA_VERSION,
+    kind: "visualization",
+    label: "Visualization",
+  });
 }
 
 export function safeParseVisualization(
   input: unknown,
-): z.ZodSafeParseResult<Visualization> {
-  return visualizationSchema.safeParse(input);
+): StructuralParseResult<Visualization> {
+  return safeParsePersistedContract(input, visualizationSchema, {
+    currentSchemaVersion: CURRENT_SCHEMA_VERSION,
+    kind: "visualization",
+    label: "Visualization",
+  });
 }

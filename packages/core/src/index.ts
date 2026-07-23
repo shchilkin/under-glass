@@ -5,7 +5,7 @@ export {
   safeParseAssetDefinition,
   type AssetDefinition,
   type AssetFootprint,
-  type AssetPoint,
+  type AssetLocalPoint,
   type AssetProvenance,
   type ConnectionPort,
   type GroundNormal,
@@ -18,6 +18,16 @@ export {
   type AssetDefinitionDiagnosticCode,
   type AssetDefinitionDiagnosticPath,
 } from "./asset-definition-validation.js";
+
+export { type DiagnosticPath, type DiagnosticSeverity } from "./diagnostics.js";
+
+export {
+  StructuralValidationError,
+  type PersistedContractKind,
+  type StructuralDiagnostic,
+  type StructuralDiagnosticCode,
+  type StructuralParseResult,
+} from "./structural-validation.js";
 
 export {
   CURRENT_SCHEMA_VERSION,
@@ -40,7 +50,6 @@ export {
 
 export {
   validateVisualizationSemantics,
-  type DiagnosticSeverity,
   type VisualizationDiagnostic,
   type VisualizationDiagnosticCode,
   type VisualizationDiagnosticPath,
