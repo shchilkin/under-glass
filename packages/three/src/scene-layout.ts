@@ -3,10 +3,10 @@ import {
   Group,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
+  ShadowMaterial,
   Vector3,
   type Object3D,
 } from "three";
@@ -194,9 +194,10 @@ export function createGroundPlane(
     routes,
   );
   const geometry = new PlaneGeometry(bounds.width, bounds.depth);
-  const material = new MeshBasicMaterial({
+  const material = new ShadowMaterial({
+    color: 0x000000,
     depthWrite: false,
-    opacity: 0,
+    opacity: 0.28,
     transparent: true,
   });
   const groundPlane = new Mesh(geometry, material);

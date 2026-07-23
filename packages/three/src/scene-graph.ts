@@ -13,15 +13,15 @@ import {
   Vector3,
   type Material,
   type Object3D,
+  type OrthographicCamera,
 } from "three";
 
-import type {
-  BasicConnectionRoute,
-  Group,
-  OpeningView,
-} from "@under-glass/core";
+import type { BasicConnectionRoute, Group } from "@under-glass/core";
 
-const COLORS = {
+import { disposeObjectResources } from "./resource-disposal.js";
+import { deriveViewportGroundBounds } from "./scene-camera.js";
+
+export const DEFAULT_SCENE_THEME = {
   connection: 0x83d6aa,
   gridMajor: 0xa4b8ae,
   gridMinor: 0x8aa096,
@@ -32,8 +32,8 @@ const COLORS = {
 
 function routeColor(route: BasicConnectionRoute): number {
   return route.styleKey === "telemetry"
-    ? COLORS.secondaryConnection
-    : COLORS.connection;
+    ? DEFAULT_SCENE_THEME.secondaryConnection
+    : DEFAULT_SCENE_THEME.connection;
 }
 
 function addMesh(
@@ -48,28 +48,42 @@ function addMesh(
   return mesh;
 }
 
-export function createInfiniteGrid(openingView: OpeningView): ThreeGroup {
+export function createInfiniteGrid(): ThreeGroup {
   const root = new ThreeGroup();
-  const span = Math.max(80, openingView.groundSpan * 8);
-  const halfSpan = span / 2;
+  root.name = "Infinite Ground Grid";
+  return root;
+}
 
+export function updateInfiniteGrid(
+  root: ThreeGroup,
+  camera: OrthographicCamera,
+): void {
+  for (const child of [...root.children]) {
+    root.remove(child);
+    disposeObjectResources(child);
+  }
+
+  const bounds = deriveViewportGroundBounds(camera);
   const createLines = (
     step: number,
     color: number,
     opacity: number,
   ): LineSegments => {
     const points: Vector3[] = [];
+    const firstX = Math.floor(bounds.minX / step) * step;
+    const firstZ = Math.floor(bounds.minZ / step) * step;
 
-    for (
-      let coordinate = -halfSpan;
-      coordinate <= halfSpan;
-      coordinate += step
-    ) {
+    for (let x = firstX; x <= bounds.maxX; x += step) {
       points.push(
-        new Vector3(coordinate, 0.006, -halfSpan),
-        new Vector3(coordinate, 0.006, halfSpan),
-        new Vector3(-halfSpan, 0.006, coordinate),
-        new Vector3(halfSpan, 0.006, coordinate),
+        new Vector3(x, 0.006, bounds.minZ),
+        new Vector3(x, 0.006, bounds.maxZ),
+      );
+    }
+
+    for (let z = firstZ; z <= bounds.maxZ; z += step) {
+      points.push(
+        new Vector3(bounds.minX, 0.006, z),
+        new Vector3(bounds.maxX, 0.006, z),
       );
     }
 
@@ -82,14 +96,12 @@ export function createInfiniteGrid(openingView: OpeningView): ThreeGroup {
         transparent: true,
       }),
     );
-    lines.position.set(openingView.center.x, 0, openingView.center.z);
     return lines;
   };
 
-  root.name = "Infinite Ground Grid";
-  root.add(createLines(1, COLORS.gridMinor, 0.15));
-  root.add(createLines(4, COLORS.gridMajor, 0.26));
-  return root;
+  root.userData.viewportGroundBounds = bounds;
+  root.add(createLines(1, DEFAULT_SCENE_THEME.gridMinor, 0.15));
+  root.add(createLines(4, DEFAULT_SCENE_THEME.gridMajor, 0.26));
 }
 
 export function createGroupSurface(group: Group): ThreeGroup {
@@ -102,7 +114,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
     root,
     new PlaneGeometry(width, depth),
     new MeshStandardMaterial({
-      color: COLORS.groupSurface,
+      color: DEFAULT_SCENE_THEME.groupSurface,
       depthWrite: false,
       metalness: 0,
       opacity: 0.72,
@@ -111,6 +123,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
     }),
     [centerX, 0.012, centerZ],
   );
+  surface.name = "Group Surface";
   surface.rotation.x = -Math.PI / 2;
   surface.receiveShadow = true;
 
@@ -123,11 +136,12 @@ export function createGroupSurface(group: Group): ThreeGroup {
   const border = new LineLoop(
     new BufferGeometry().setFromPoints(borderPoints),
     new LineBasicMaterial({
-      color: COLORS.groupBorder,
+      color: DEFAULT_SCENE_THEME.groupBorder,
       opacity: 0.9,
       transparent: true,
     }),
   );
+  border.name = "Group Border";
 
   root.name = `Group ${group.id}`;
   root.add(border);
@@ -139,12 +153,14 @@ function createRouteArrow(
   point: Vector3,
   direction: Vector3,
   material: MeshStandardMaterial,
+  name: string,
 ): void {
   const arrow = addMesh(parent, new ConeGeometry(0.14, 0.32, 16), material, [
     point.x,
     point.y,
     point.z,
   ]);
+  arrow.name = name;
   arrow.quaternion.setFromUnitVectors(
     new Vector3(0, 1, 0),
     direction.normalize(),
@@ -181,6 +197,7 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
       material,
       [(start.x + end.x) / 2, (start.y + end.y) / 2, (start.z + end.z) / 2],
     );
+    segment.name = "Route Segment";
     segment.quaternion.setFromUnitVectors(
       new Vector3(0, 1, 0),
       direction.clone().normalize(),
@@ -205,7 +222,13 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
     last !== undefined &&
     beforeLast !== undefined
   ) {
-    createRouteArrow(root, last, last.clone().sub(beforeLast), material);
+    createRouteArrow(
+      root,
+      last,
+      last.clone().sub(beforeLast),
+      material,
+      "Forward Arrow",
+    );
   }
 
   if (
@@ -213,7 +236,13 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
     first !== undefined &&
     second !== undefined
   ) {
-    createRouteArrow(root, first, first.clone().sub(second), material);
+    createRouteArrow(
+      root,
+      first,
+      first.clone().sub(second),
+      material,
+      "Backward Arrow",
+    );
   }
 
   root.name = `Connection ${route.connectionId}`;

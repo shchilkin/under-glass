@@ -134,13 +134,58 @@ describe("routeBasicConnections", () => {
     ]);
     const routes = routeBasicConnections(visualization, footprints);
 
-    expect(
-      deriveVisualizationBounds(visualization, footprints, routes),
-    ).toEqual({
+    const bounds = deriveVisualizationBounds(visualization, footprints, routes);
+
+    expect(bounds).toMatchObject({
       minX: -4,
       minZ: -4,
-      maxX: 9.75,
-      maxZ: 7.75,
+      maxX: 9,
     });
+    expect(bounds.maxZ).toBeCloseTo(7.025, 6);
+  });
+
+  it("expands scene bounds for long Node and Connection labels", () => {
+    const visualization = parseVisualization({
+      schemaVersion: 1,
+      nodes: [
+        {
+          id: "source",
+          label: "A very long source component label",
+          assetId: "service",
+          position: { x: 0, z: 0 },
+          quarterTurns: 0,
+        },
+        {
+          id: "target",
+          label: "Target",
+          assetId: "service",
+          position: { x: 2, z: 0 },
+          quarterTurns: 0,
+        },
+      ],
+      groups: [],
+      connections: [
+        {
+          id: "request",
+          label: "A long asynchronous request label",
+          source: { nodeId: "source" },
+          target: { nodeId: "target" },
+          direction: "oneWay",
+          routeAnchors: [],
+        },
+      ],
+      openingView: {
+        cameraMode: "isometric",
+        quarterTurns: 0,
+        center: { x: 1, z: 0 },
+        groundSpan: 12,
+      },
+    });
+    const routes = routeBasicConnections(visualization, new Map());
+    const bounds = deriveVisualizationBounds(visualization, new Map(), routes);
+
+    expect(bounds.minX).toBeLessThan(-4);
+    expect(bounds.maxX).toBeGreaterThan(5);
+    expect(bounds.maxZ).toBeGreaterThan(3);
   });
 });

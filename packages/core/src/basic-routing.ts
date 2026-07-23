@@ -19,7 +19,11 @@ export interface BasicConnectionRoute {
 const DEFAULT_FOOTPRINT_HALF_SPAN = 0.5;
 const ENTRY_SEGMENT_LENGTH = 0.5;
 const GROUND_PLANE_PADDING = 2;
-const NODE_LABEL_GROUND_MARGIN = 0.75;
+const LABEL_CHARACTER_WIDTH = 0.14;
+const LABEL_HORIZONTAL_PADDING = 0.35;
+const LABEL_HEIGHT = 0.45;
+const NODE_LABEL_Z_OFFSET = 0.8;
+const GROUP_LABEL_INSET = 0.35;
 
 function defaultFootprint(node: Node): GroundBounds {
   return {
@@ -152,13 +156,47 @@ export function routeBasicConnections(
   return routes;
 }
 
-function expandedNodeBounds(bounds: GroundBounds): GroundBounds {
+function centeredLabelBounds(label: string, point: GroundPoint): GroundBounds {
+  const halfWidth =
+    (label.length * LABEL_CHARACTER_WIDTH + LABEL_HORIZONTAL_PADDING * 2) / 2;
+  const halfHeight = LABEL_HEIGHT / 2;
+
   return {
-    minX: bounds.minX - NODE_LABEL_GROUND_MARGIN,
-    minZ: bounds.minZ - NODE_LABEL_GROUND_MARGIN,
-    maxX: bounds.maxX + NODE_LABEL_GROUND_MARGIN,
-    maxZ: bounds.maxZ + NODE_LABEL_GROUND_MARGIN,
+    minX: point.x - halfWidth,
+    minZ: point.z - halfHeight,
+    maxX: point.x + halfWidth,
+    maxZ: point.z + halfHeight,
   };
+}
+
+function nodeLabelBounds(node: Node): GroundBounds {
+  return centeredLabelBounds(node.label, {
+    x: node.position.x,
+    z: node.position.z + NODE_LABEL_Z_OFFSET,
+  });
+}
+
+function groupLabelBounds(label: string, bounds: GroundBounds): GroundBounds {
+  const width =
+    label.length * LABEL_CHARACTER_WIDTH + LABEL_HORIZONTAL_PADDING * 2;
+  const minX = bounds.minX + GROUP_LABEL_INSET;
+  const minZ = bounds.minZ + GROUP_LABEL_INSET - LABEL_HEIGHT / 2;
+
+  return {
+    minX,
+    minZ,
+    maxX: minX + width,
+    maxZ: minZ + LABEL_HEIGHT,
+  };
+}
+
+function routeLabelBounds(route: BasicConnectionRoute): GroundBounds | null {
+  if (route.label.length === 0) {
+    return null;
+  }
+
+  const point = route.points[Math.floor(route.points.length / 2)];
+  return point === undefined ? null : centeredLabelBounds(route.label, point);
 }
 
 export function deriveVisualizationBounds(
@@ -167,12 +205,14 @@ export function deriveVisualizationBounds(
   routes: readonly BasicConnectionRoute[],
 ): GroundBounds {
   const bounds: GroundBounds[] = [
-    ...visualization.nodes.map((node) =>
-      expandedNodeBounds(
-        footprintsByNode.get(node.id) ?? defaultFootprint(node),
-      ),
+    ...visualization.nodes.map(
+      (node) => footprintsByNode.get(node.id) ?? defaultFootprint(node),
     ),
+    ...visualization.nodes.map(nodeLabelBounds),
     ...visualization.groups.map((group) => group.bounds),
+    ...visualization.groups.map((group) =>
+      groupLabelBounds(group.label ?? group.id, group.bounds),
+    ),
     ...routes.flatMap((route) =>
       route.points.map((point) => ({
         minX: point.x,
@@ -181,6 +221,10 @@ export function deriveVisualizationBounds(
         maxZ: point.z,
       })),
     ),
+    ...routes.flatMap((route) => {
+      const labelBounds = routeLabelBounds(route);
+      return labelBounds === null ? [] : [labelBounds];
+    }),
   ];
 
   if (bounds.length === 0) {

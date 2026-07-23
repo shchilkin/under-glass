@@ -121,7 +121,9 @@ export function createLabelOverlay(
       const projected = label.point.clone().project(camera);
       const x = (projected.x * 0.5 + 0.5) * width;
       const y = (-projected.y * 0.5 + 0.5) * height;
-      label.element.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+      const anchor =
+        label.type === "group" ? "translate(0, -50%)" : "translate(-50%, -50%)";
+      label.element.style.transform = `translate3d(${x}px, ${y}px, 0) ${anchor}`;
       label.element.hidden =
         projected.z < -1 ||
         projected.z > 1 ||

@@ -1,0 +1,134 @@
+import {
+  BufferAttribute,
+  LineBasicMaterial,
+  LineLoop,
+  LineSegments,
+  Mesh,
+  MeshStandardMaterial,
+  type Object3D,
+} from "three";
+import { describe, expect, it } from "vitest";
+
+import type { BasicConnectionRoute, Group } from "@under-glass/core";
+
+import {
+  createConnectionRoute,
+  createGroupSurface,
+  createInfiniteGrid,
+  DEFAULT_SCENE_THEME,
+  updateInfiniteGrid,
+} from "./scene-graph.js";
+import { applyOpeningView, createOpeningViewCamera } from "./scene-camera.js";
+
+function meshNamed(root: Object3D, name: string): Mesh {
+  const mesh = root.getObjectByName(name);
+
+  expect(mesh).toBeInstanceOf(Mesh);
+  return mesh as Mesh;
+}
+
+const route: BasicConnectionRoute = {
+  connectionId: "request",
+  direction: "oneWay",
+  label: "Request",
+  points: [
+    { x: 0, z: 0 },
+    { x: 2, z: 0 },
+  ],
+  sourcePort: { x: 0, z: 0 },
+  targetPort: { x: 2, z: 0 },
+};
+
+describe("project graph presentation", () => {
+  it("keeps major grid lines on stable world-space multiples of four", () => {
+    const camera = createOpeningViewCamera();
+    const grid = createInfiniteGrid();
+
+    for (const [width, height, mode] of [
+      [600, 900, "isometric"],
+      [1200, 500, "top"],
+    ] as const) {
+      applyOpeningView(
+        camera,
+        {
+          cameraMode: mode,
+          quarterTurns: 0,
+          center: { x: 1.25, z: -2.75 },
+          groundSpan: 10,
+        },
+        mode,
+        width,
+        height,
+      );
+      updateInfiniteGrid(grid, camera);
+
+      const majorLines = grid.children[1];
+      expect(majorLines).toBeInstanceOf(LineSegments);
+      const position = (majorLines as LineSegments).geometry.getAttribute(
+        "position",
+      );
+
+      expect(position).toBeInstanceOf(BufferAttribute);
+      for (
+        let index = 0;
+        index < (position as BufferAttribute).count;
+        index += 2
+      ) {
+        const startX = (position as BufferAttribute).getX(index);
+        const startZ = (position as BufferAttribute).getZ(index);
+        const endX = (position as BufferAttribute).getX(index + 1);
+        const endZ = (position as BufferAttribute).getZ(index + 1);
+
+        if (startX === endX) {
+          expect(Math.abs(startX % 4)).toBe(0);
+        } else {
+          expect(startZ).toBe(endZ);
+          expect(Math.abs(startZ % 4)).toBe(0);
+        }
+      }
+    }
+  });
+
+  it("renders Groups as flat tinted regions with a visible border", () => {
+    const group: Group = {
+      id: "core",
+      label: "Core",
+      bounds: { minX: -2, minZ: -1, maxX: 3, maxZ: 4 },
+    };
+    const presentation = createGroupSurface(group);
+    const surface = meshNamed(presentation, "Group Surface");
+    const border = presentation.getObjectByName("Group Border");
+
+    expect(surface.rotation.x).toBeCloseTo(-Math.PI / 2, 6);
+    expect(surface.receiveShadow).toBe(true);
+    expect((surface.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupSurface,
+    );
+    expect(border).toBeInstanceOf(LineLoop);
+    expect((border as LineLoop).material).toBeInstanceOf(LineBasicMaterial);
+    expect(
+      ((border as LineLoop).material as LineBasicMaterial).color.getHex(),
+    ).toBe(DEFAULT_SCENE_THEME.groupBorder);
+  });
+
+  it("renders a one-way route with a forward arrow at the target", () => {
+    const presentation = createConnectionRoute(route);
+    const arrow = meshNamed(presentation, "Forward Arrow");
+
+    expect(arrow.position.x).toBeCloseTo(1.94, 6);
+    expect(arrow.position.z).toBeCloseTo(0, 6);
+    expect(presentation.getObjectByName("Backward Arrow")).toBeUndefined();
+  });
+
+  it("falls back to the default connection treatment for unknown Style Keys", () => {
+    const presentation = createConnectionRoute({
+      ...route,
+      styleKey: "host-defined-but-unmapped",
+    });
+    const segment = meshNamed(presentation, "Route Segment");
+
+    expect((segment.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.connection,
+    );
+  });
+});

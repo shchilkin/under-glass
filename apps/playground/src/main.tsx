@@ -20,7 +20,7 @@ import { PROJECT_GRAPH_VISUALIZATION } from "./project-graph-fixture.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
-const showUnsupportedConnection = searchParameters.has("connections");
+const showConnection = searchParameters.has("connections");
 const scenario = searchParameters.get("scenario") ?? "single";
 
 function recoverableScenarioNodes(failure: string): Node[] {
@@ -49,6 +49,22 @@ const SINGLE_NODE: Node[] = [
     assetId: "demo-system",
     position: { x: 0, z: 0 },
     quarterTurns: 1,
+  },
+];
+const CONNECTION_NODES: Node[] = [
+  {
+    id: "connection-source",
+    label: "Source",
+    assetId: "demo-system",
+    position: { x: -2, z: 0 },
+    quarterTurns: 0,
+  },
+  {
+    id: "connection-target",
+    label: "Target",
+    assetId: "demo-system",
+    position: { x: 2, z: 0 },
+    quarterTurns: 2,
   },
 ];
 const SCENARIO_NODES: Readonly<Record<string, readonly Node[]>> = {
@@ -113,6 +129,10 @@ const SCENARIO_NODES: Readonly<Record<string, readonly Node[]>> = {
 };
 
 function createScenarioNodes(): Node[] {
+  if (showConnection) {
+    return CONNECTION_NODES;
+  }
+
   return [...(SCENARIO_NODES[scenario] ?? SINGLE_NODE)];
 }
 
@@ -168,14 +188,14 @@ function createDemoVisualization(): Visualization {
     schemaVersion: 1,
     nodes: demoNodes,
     groups: [],
-    connections: showUnsupportedConnection
+    connections: showConnection
       ? [
           {
             id: "supported-connection",
-            label: "Loop",
-            source: { nodeId: "demo-node" },
-            target: { nodeId: "demo-node" },
-            direction: "undirected",
+            label: "Request",
+            source: { nodeId: "connection-source" },
+            target: { nodeId: "connection-target" },
+            direction: "oneWay",
             routeAnchors: [],
           },
         ]

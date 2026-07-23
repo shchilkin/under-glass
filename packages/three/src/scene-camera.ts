@@ -1,10 +1,11 @@
 import { OrthographicCamera, Vector3 } from "three";
 
-import type { OpeningView } from "@under-glass/core";
+import type { GroundBounds, OpeningView } from "@under-glass/core";
 
 export type CameraMode = OpeningView["cameraMode"];
 
 const CAMERA_DISTANCE = 40;
+const GRID_VIEWPORT_PADDING = 2;
 const Y_AXIS = new Vector3(0, 1, 0);
 
 export function applyOpeningView(
@@ -42,8 +43,43 @@ export function applyOpeningView(
 
   camera.lookAt(center);
   camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
 }
 
 export function createOpeningViewCamera(): OrthographicCamera {
   return new OrthographicCamera();
+}
+
+export function deriveViewportGroundBounds(
+  camera: OrthographicCamera,
+): GroundBounds {
+  const intersections = (
+    [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ] as const
+  ).map(([x, y]) => {
+    const near = new Vector3(x, y, -1).unproject(camera);
+    const far = new Vector3(x, y, 1).unproject(camera);
+    const direction = far.sub(near);
+
+    return near.addScaledVector(direction, -near.y / direction.y);
+  });
+
+  return {
+    minX:
+      Math.floor(Math.min(...intersections.map((point) => point.x))) -
+      GRID_VIEWPORT_PADDING,
+    minZ:
+      Math.floor(Math.min(...intersections.map((point) => point.z))) -
+      GRID_VIEWPORT_PADDING,
+    maxX:
+      Math.ceil(Math.max(...intersections.map((point) => point.x))) +
+      GRID_VIEWPORT_PADDING,
+    maxZ:
+      Math.ceil(Math.max(...intersections.map((point) => point.z))) +
+      GRID_VIEWPORT_PADDING,
+  };
 }

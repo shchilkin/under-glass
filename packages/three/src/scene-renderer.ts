@@ -56,6 +56,7 @@ import {
   createConnectionRoute,
   createGroupSurface,
   createInfiniteGrid,
+  updateInfiniteGrid,
 } from "./scene-graph.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
 import type {
@@ -70,6 +71,7 @@ interface RenderingSurface {
   cameraMode: CameraMode;
   readonly connectionLayer: Group;
   readonly container: HTMLElement;
+  readonly groundGrid: Group;
   readonly groundPlane: Mesh;
   readonly labels: LabelOverlay;
   readonly openingView: OpeningView;
@@ -144,6 +146,7 @@ function resizeSurface(
     width,
     height,
   );
+  updateInfiniteGrid(surface.groundGrid, surface.camera);
   surface.webGlRenderer.setSize(width, height, false);
   renderSurface(surface);
 }
@@ -162,6 +165,7 @@ function createRenderingSurface(
   const camera = createOpeningViewCamera();
   const center = visualization.openingView.center;
   const groundPlane = createGroundPlane(visualization, new Map());
+  const groundGrid = createInfiniteGrid();
   const connectionLayer = new Group();
   const labels = createLabelOverlay(container, visualization);
 
@@ -182,7 +186,7 @@ function createRenderingSurface(
   scene.add(new HemisphereLight(0xe8f3ed, 0x18201d, 1.6));
   scene.add(new AmbientLight(0xffffff, 0.65));
   scene.add(groundPlane);
-  scene.add(createInfiniteGrid(visualization.openingView));
+  scene.add(groundGrid);
 
   for (const group of visualization.groups) {
     scene.add(createGroupSurface(group));
@@ -210,6 +214,7 @@ function createRenderingSurface(
     cameraMode: visualization.openingView.cameraMode,
     connectionLayer,
     container,
+    groundGrid,
     groundPlane,
     labels,
     openingView: visualization.openingView,
