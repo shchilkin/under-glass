@@ -8,6 +8,7 @@ export interface SceneStateStore {
 }
 
 export function createSceneStateStore(): SceneStateStore {
+  let active = true;
   let snapshot: SceneRendererSnapshot = {
     diagnostics: [],
     status: "loading",
@@ -16,12 +17,17 @@ export function createSceneStateStore(): SceneStateStore {
 
   return {
     dispose(): void {
+      active = false;
       listeners.clear();
     },
     getSnapshot(): SceneRendererSnapshot {
       return snapshot;
     },
     setSnapshot(nextSnapshot: SceneRendererSnapshot): void {
+      if (!active) {
+        return;
+      }
+
       snapshot = nextSnapshot;
 
       for (const listener of listeners) {
@@ -29,6 +35,10 @@ export function createSceneStateStore(): SceneStateStore {
       }
     },
     subscribe(listener: () => void): () => void {
+      if (!active) {
+        return () => {};
+      }
+
       listeners.add(listener);
       return () => {
         listeners.delete(listener);

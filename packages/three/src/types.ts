@@ -10,6 +10,7 @@ export type SceneRendererDiagnosticCode =
   | "asset-definition-mismatch"
   | "asset-load-failed"
   | "renderer-unavailable"
+  | "unsupported-connections"
   | "unsupported-node-count";
 
 export interface SceneRendererDiagnostic {

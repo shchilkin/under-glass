@@ -57,3 +57,19 @@ test("reports a stable failed lifecycle when WebGL2 is unavailable", async ({
     0,
   );
 });
+
+test("fails rather than silently omitting deferred Connections", async ({
+  page,
+}) => {
+  await page.goto("/?connections");
+
+  await expect(
+    page.getByText("loading → failed", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("unsupported-connections", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+    0,
+  );
+});

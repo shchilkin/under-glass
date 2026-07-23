@@ -10,6 +10,7 @@ import {
   Quaternion,
   Scene,
   SRGBColorSpace,
+  Vector3,
   WebGLRenderer,
   type Object3D,
 } from "three";
@@ -35,9 +36,63 @@ interface RenderingSurface {
   readonly webGlRenderer: WebGLRenderer;
 }
 
-function createGroundPlane(visualization: Visualization): Mesh {
-  const span = visualization.openingView.groundSpan;
-  const geometry = new PlaneGeometry(span, span);
+interface GroundPlaneBounds {
+  readonly centerX: number;
+  readonly centerZ: number;
+  readonly depth: number;
+  readonly width: number;
+}
+
+const GROUND_PLANE_PADDING = 2;
+
+function deriveGroundPlaneBounds(
+  node: Node,
+  definition: AssetDefinition,
+): GroundPlaneBounds {
+  const footprint = definition.footprint;
+  const groundContact = definition.groundContact;
+  const rotation = definition.normalizationRotation;
+  const normalizationRotation = new Quaternion(
+    rotation.x,
+    rotation.y,
+    rotation.z,
+    rotation.w,
+  ).normalize();
+  const nodeRotation = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 1, 0),
+    node.quarterTurns * (Math.PI / 2),
+  );
+  const worldRotation = nodeRotation.multiply(normalizationRotation);
+  const footprintCorners: ReadonlyArray<readonly [number, number]> = [
+    [footprint.minX, footprint.minZ],
+    [footprint.minX, footprint.maxZ],
+    [footprint.maxX, footprint.minZ],
+    [footprint.maxX, footprint.maxZ],
+  ];
+  const worldCorners = footprintCorners.map(([x, z]) =>
+    new Vector3(x - groundContact.x, 0, z - groundContact.z)
+      .multiplyScalar(definition.scale)
+      .applyQuaternion(worldRotation)
+      .add(new Vector3(node.position.x, 0, node.position.z)),
+  );
+  const xCoordinates = worldCorners.map((corner) => corner.x);
+  const zCoordinates = worldCorners.map((corner) => corner.z);
+  const minX = Math.min(...xCoordinates);
+  const maxX = Math.max(...xCoordinates);
+  const minZ = Math.min(...zCoordinates);
+  const maxZ = Math.max(...zCoordinates);
+
+  return {
+    centerX: (minX + maxX) / 2,
+    centerZ: (minZ + maxZ) / 2,
+    depth: maxZ - minZ + GROUND_PLANE_PADDING * 2,
+    width: maxX - minX + GROUND_PLANE_PADDING * 2,
+  };
+}
+
+function createGroundPlane(node: Node, definition: AssetDefinition): Mesh {
+  const bounds = deriveGroundPlaneBounds(node, definition);
+  const geometry = new PlaneGeometry(bounds.width, bounds.depth);
   const material = new MeshStandardMaterial({
     color: 0x1b2521,
     metalness: 0,
@@ -46,11 +101,7 @@ function createGroundPlane(visualization: Visualization): Mesh {
   const groundPlane = new Mesh(geometry, material);
 
   groundPlane.name = "Ground Plane";
-  groundPlane.position.set(
-    visualization.openingView.center.x,
-    -0.001,
-    visualization.openingView.center.z,
-  );
+  groundPlane.position.set(bounds.centerX, -0.001, bounds.centerZ);
   groundPlane.rotation.x = -Math.PI / 2;
   groundPlane.receiveShadow = true;
   return groundPlane;
@@ -97,7 +148,6 @@ function createRenderingSurface(
   webGlRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   webGlRenderer.outputColorSpace = SRGBColorSpace;
   scene.background = new Color(0x111816);
-  scene.add(createGroundPlane(visualization));
   scene.add(new AmbientLight(0xffffff, 1.7));
 
   const keyLight = new DirectionalLight(0xffffff, 3.2);
@@ -217,6 +267,8 @@ async function loadNode(
       return;
     }
 
+    surface.scene.add(createGroundPlane(node, resolvedAsset.definition));
+    renderSurface(surface);
     const asset = await parseGlb(resolvedAsset.bytes);
 
     if (isDisposed()) {
@@ -256,6 +308,16 @@ function unsupportedNodeCountDiagnostic(
   };
 }
 
+function unsupportedConnectionsDiagnostic(
+  connectionCount: number,
+): SceneRendererDiagnostic {
+  return {
+    code: "unsupported-connections",
+    message: `Connections are deferred to v0.2; received ${connectionCount}.`,
+    severity: "error",
+  };
+}
+
 function rendererUnavailableDiagnostic(
   error: unknown,
 ): SceneRendererDiagnostic {
@@ -268,6 +330,21 @@ function rendererUnavailableDiagnostic(
   };
 }
 
+function deferFailedLifecycle(
+  store: SceneStateStore,
+  diagnostic: SceneRendererDiagnostic,
+  isDisposed: () => boolean,
+): void {
+  queueMicrotask(() => {
+    if (!isDisposed()) {
+      store.setSnapshot({
+        diagnostics: [diagnostic],
+        status: "failed",
+      });
+    }
+  });
+}
+
 export function createSceneRenderer(
   options: CreateSceneRendererOptions,
 ): SceneRenderer {
@@ -277,12 +354,19 @@ export function createSceneRenderer(
   const [node] = options.visualization.nodes;
 
   if (node === undefined || options.visualization.nodes.length !== 1) {
-    store.setSnapshot({
-      diagnostics: [
-        unsupportedNodeCountDiagnostic(options.visualization.nodes.length),
-      ],
-      status: "failed",
-    });
+    deferFailedLifecycle(
+      store,
+      unsupportedNodeCountDiagnostic(options.visualization.nodes.length),
+      () => disposed,
+    );
+  } else if (options.visualization.connections.length > 0) {
+    deferFailedLifecycle(
+      store,
+      unsupportedConnectionsDiagnostic(
+        options.visualization.connections.length,
+      ),
+      () => disposed,
+    );
   } else {
     try {
       surface = createRenderingSurface(
@@ -291,10 +375,11 @@ export function createSceneRenderer(
       );
       void loadNode(node, options, surface, store, () => disposed);
     } catch (error) {
-      store.setSnapshot({
-        diagnostics: [rendererUnavailableDiagnostic(error)],
-        status: "failed",
-      });
+      deferFailedLifecycle(
+        store,
+        rendererUnavailableDiagnostic(error),
+        () => disposed,
+      );
     }
   }
 

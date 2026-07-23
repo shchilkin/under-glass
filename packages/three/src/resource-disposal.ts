@@ -3,6 +3,8 @@ import {
   Material,
   Mesh,
   type Object3D,
+  type Skeleton,
+  SkinnedMesh,
   Texture,
 } from "three";
 
@@ -21,9 +23,18 @@ function disposeMaterialTextures(
 export function disposeObjectResources(root: Object3D): void {
   const disposedGeometries = new Set<BufferGeometry>();
   const disposedMaterials = new Set<Material>();
+  const disposedSkeletons = new Set<Skeleton>();
   const disposedTextures = new Set<Texture>();
 
   root.traverse((object) => {
+    if (
+      object instanceof SkinnedMesh &&
+      !disposedSkeletons.has(object.skeleton)
+    ) {
+      disposedSkeletons.add(object.skeleton);
+      object.skeleton.dispose();
+    }
+
     if (!(object instanceof Mesh)) {
       return;
     }

@@ -11,6 +11,10 @@ import {
 import { resolveDemoAsset } from "./demo-asset.js";
 import "./styles.css";
 
+const showUnsupportedConnection = new URLSearchParams(
+  window.location.search,
+).has("connections");
+
 const demoVisualization = parseVisualization({
   schemaVersion: 1,
   nodes: [
@@ -23,7 +27,18 @@ const demoVisualization = parseVisualization({
     },
   ],
   groups: [],
-  connections: [],
+  connections: showUnsupportedConnection
+    ? [
+        {
+          id: "unsupported-connection",
+          label: "",
+          source: { nodeId: "demo-node" },
+          target: { nodeId: "demo-node" },
+          direction: "undirected",
+          routeAnchors: [],
+        },
+      ]
+    : [],
   openingView: {
     cameraMode: "isometric",
     quarterTurns: 0,
@@ -48,9 +63,7 @@ function App() {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
   const [snapshot, setSnapshot] =
     useState<SceneRendererSnapshot>(loadingSnapshot);
-  const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([
-    "loading",
-  ]);
+  const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([]);
 
   useEffect(() => {
     const container = sceneContainerRef.current;
@@ -102,7 +115,7 @@ function App() {
         </div>
         <div>
           <dt>Lifecycle</dt>
-          <dd>{statusHistory.join(" → ")}</dd>
+          <dd>{statusHistory.join(" → ") || "Starting"}</dd>
         </div>
       </dl>
       {snapshot.diagnostics.length > 0 ? (
