@@ -2,29 +2,38 @@ import {
   AmbientLight,
   Color,
   DirectionalLight,
-  Group,
-  Matrix4,
-  Mesh,
-  MeshStandardMaterial,
   PerspectiveCamera,
-  PlaneGeometry,
-  Quaternion,
   Scene,
   SRGBColorSpace,
-  Vector3,
   WebGLRenderer,
+  type Mesh,
   type Object3D,
 } from "three";
 
 import type { AssetDefinition, Node, Visualization } from "@under-glass/core";
-import { validateAssetDefinitionSemantics } from "@under-glass/core";
+import { validateVisualizationSemantics } from "@under-glass/core";
 
+import {
+  createAssetSession,
+  recoverableAssetDiagnostic,
+  type AssetSession,
+  type PreparedNodeAsset,
+} from "./asset-session.js";
 import { parseGlb } from "./glb.js";
-import { disposeObjectResources } from "./resource-disposal.js";
+import {
+  disposeObjectResourceRoots,
+  disposeObjectResources,
+} from "./resource-disposal.js";
+import {
+  createAssetPlaceholder,
+  createGroundPlane,
+  createPlacedAsset,
+  updateAssetPlaceholder,
+  updateGroundPlane,
+} from "./scene-layout.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
 import type {
   CreateSceneRendererOptions,
-  ResolvedAsset,
   SceneRenderer,
   SceneRendererDiagnostic,
 } from "./types.js";
@@ -32,130 +41,55 @@ import type {
 interface RenderingSurface {
   readonly camera: PerspectiveCamera;
   readonly canvas: HTMLCanvasElement;
+  readonly groundPlane: Mesh;
   readonly resizeObserver: ResizeObserver;
   readonly scene: Scene;
   readonly webGlRenderer: WebGLRenderer;
 }
 
 interface RendererSession {
+  readonly assetDefinitionsByNode: Map<string, AssetDefinition>;
+  readonly assets: AssetSession;
+  readonly placeholders: Map<string, Mesh>;
   disposed: boolean;
   surface: RenderingSurface | null;
 }
 
-interface LoadedNodeAsset {
-  readonly asset: Object3D;
-  readonly resolvedAsset: ResolvedAsset;
+interface NodeLoadContext {
+  readonly isDisposed: () => boolean;
+  readonly options: CreateSceneRendererOptions;
+  readonly session: RendererSession;
+  readonly surface: RenderingSurface;
 }
 
-type RenderableNodeResult =
-  | {
-      readonly diagnostic: SceneRendererDiagnostic;
-    }
-  | {
-      readonly node: Node;
-    };
-
-class SceneRendererDiagnosticError extends Error {
-  readonly diagnostic: SceneRendererDiagnostic;
-
-  constructor(diagnostic: SceneRendererDiagnostic) {
-    super(diagnostic.message);
-    this.name = "SceneRendererDiagnosticError";
-    this.diagnostic = diagnostic;
+function addAssetPlaceholders(
+  nodes: readonly Node[],
+  surface: RenderingSurface,
+  session: RendererSession,
+): void {
+  for (const node of nodes) {
+    const placeholder = createAssetPlaceholder(node);
+    session.placeholders.set(node.id, placeholder);
+    surface.scene.add(placeholder);
   }
+
+  renderSurface(surface);
 }
 
-interface GroundPlaneBounds {
-  readonly centerX: number;
-  readonly centerZ: number;
-  readonly depth: number;
-  readonly width: number;
-}
+function removeAssetPlaceholder(
+  nodeId: string,
+  surface: RenderingSurface,
+  session: RendererSession,
+): void {
+  const placeholder = session.placeholders.get(nodeId);
 
-const GROUND_PLANE_PADDING = 2;
+  if (placeholder === undefined) {
+    return;
+  }
 
-function createNodePlacementMatrix(
-  node: Node,
-  definition: AssetDefinition,
-): Matrix4 {
-  const rotation = definition.normalizationRotation;
-  const normalizationRotation = new Quaternion(
-    rotation.x,
-    rotation.y,
-    rotation.z,
-    rotation.w,
-  ).normalize();
-  const nodeRotation = new Quaternion().setFromAxisAngle(
-    new Vector3(0, 1, 0),
-    node.quarterTurns * (Math.PI / 2),
-  );
-  const scale = new Vector3(
-    definition.scale,
-    definition.scale,
-    definition.scale,
-  );
-  const worldTransform = new Matrix4().compose(
-    new Vector3(node.position.x, 0, node.position.z),
-    nodeRotation.multiply(normalizationRotation),
-    scale,
-  );
-  const groundContact = definition.groundContact;
-
-  return worldTransform.multiply(
-    new Matrix4().makeTranslation(
-      -groundContact.x,
-      -groundContact.y,
-      -groundContact.z,
-    ),
-  );
-}
-
-function deriveGroundPlaneBounds(
-  node: Node,
-  definition: AssetDefinition,
-): GroundPlaneBounds {
-  const footprint = definition.footprint;
-  const groundContact = definition.groundContact;
-  const placementMatrix = createNodePlacementMatrix(node, definition);
-  const footprintCorners: ReadonlyArray<readonly [number, number]> = [
-    [footprint.minX, footprint.minZ],
-    [footprint.minX, footprint.maxZ],
-    [footprint.maxX, footprint.minZ],
-    [footprint.maxX, footprint.maxZ],
-  ];
-  const worldCorners = footprintCorners.map(([x, z]) =>
-    new Vector3(x, groundContact.y, z).applyMatrix4(placementMatrix),
-  );
-  const xCoordinates = worldCorners.map((corner) => corner.x);
-  const zCoordinates = worldCorners.map((corner) => corner.z);
-  const minX = Math.min(...xCoordinates);
-  const maxX = Math.max(...xCoordinates);
-  const minZ = Math.min(...zCoordinates);
-  const maxZ = Math.max(...zCoordinates);
-
-  return {
-    centerX: (minX + maxX) / 2,
-    centerZ: (minZ + maxZ) / 2,
-    depth: maxZ - minZ + GROUND_PLANE_PADDING * 2,
-    width: maxX - minX + GROUND_PLANE_PADDING * 2,
-  };
-}
-
-function createGroundPlane(node: Node, definition: AssetDefinition): Mesh {
-  const bounds = deriveGroundPlaneBounds(node, definition);
-  const geometry = new PlaneGeometry(bounds.width, bounds.depth);
-  const material = new MeshStandardMaterial({
-    color: 0x1b2521,
-    metalness: 0,
-    roughness: 1,
-  });
-  const groundPlane = new Mesh(geometry, material);
-
-  groundPlane.name = "Ground Plane";
-  groundPlane.position.set(bounds.centerX, -0.001, bounds.centerZ);
-  groundPlane.rotation.x = -Math.PI / 2;
-  groundPlane.receiveShadow = true;
-  return groundPlane;
+  surface.scene.remove(placeholder);
+  session.placeholders.delete(nodeId);
+  disposeObjectResources(placeholder);
 }
 
 function renderSurface(surface: RenderingSurface): void {
@@ -188,6 +122,7 @@ function createRenderingSurface(
   const scene = new Scene();
   const camera = new PerspectiveCamera(40, 1, 0.1, 100);
   const center = visualization.openingView.center;
+  const groundPlane = createGroundPlane(visualization, new Map());
 
   canvas.dataset.underGlassRenderer = "";
   canvas.setAttribute("aria-hidden", "true");
@@ -200,6 +135,7 @@ function createRenderingSurface(
   webGlRenderer.outputColorSpace = SRGBColorSpace;
   scene.background = new Color(0x111816);
   scene.add(new AmbientLight(0xffffff, 1.7));
+  scene.add(groundPlane);
 
   const keyLight = new DirectionalLight(0xffffff, 3.2);
   keyLight.position.set(center.x + 4, 7, center.z + 5);
@@ -211,6 +147,7 @@ function createRenderingSurface(
   const surface: RenderingSurface = {
     camera,
     canvas,
+    groundPlane,
     resizeObserver: new ResizeObserver(() => {
       resizeSurface(surface, container);
     }),
@@ -223,110 +160,48 @@ function createRenderingSurface(
   return surface;
 }
 
-function createPlacedAsset(
+function applyResolvedAssetDefinition(
   node: Node,
   definition: AssetDefinition,
-  asset: Object3D,
-): Object3D {
-  const placement = new Group();
+  context: NodeLoadContext,
+): void {
+  context.session.assetDefinitionsByNode.set(node.id, definition);
+  const placeholder = context.session.placeholders.get(node.id);
 
-  placement.name = `Node ${node.id}`;
-  placement.matrixAutoUpdate = false;
-  placement.matrix.copy(createNodePlacementMatrix(node, definition));
-  placement.add(asset);
-  return placement;
-}
-
-function validateResolvedAsset(
-  expectedAssetId: string,
-  resolvedAsset: ResolvedAsset,
-): SceneRendererDiagnostic | null {
-  if (resolvedAsset.definition.assetId !== expectedAssetId) {
-    return {
-      code: "asset-definition-mismatch",
-      entityId: expectedAssetId,
-      message: `Asset Resolver returned Asset Definition "${resolvedAsset.definition.assetId}" for Asset ID "${expectedAssetId}".`,
-      severity: "error",
-    };
+  if (placeholder !== undefined) {
+    updateAssetPlaceholder(placeholder, node, definition);
   }
 
-  const semanticErrors = validateAssetDefinitionSemantics(
-    resolvedAsset.definition,
-  ).filter((diagnostic) => diagnostic.severity === "error");
-
-  if (semanticErrors.length > 0) {
-    return {
-      code: "asset-load-failed",
-      entityId: expectedAssetId,
-      message: `Asset Definition "${expectedAssetId}" is not semantically valid.`,
-      severity: "error",
-    };
-  }
-
-  return null;
-}
-
-function failedAssetDiagnostic(
-  node: Node,
-  error: unknown,
-): SceneRendererDiagnostic {
-  const reason = error instanceof Error ? error.message : "Unknown error.";
-
-  return {
-    code: "asset-load-failed",
-    entityId: node.id,
-    message: `Node "${node.id}" could not load Asset ID "${node.assetId}": ${reason}`,
-    severity: "error",
-  };
-}
-
-async function resolveNodeAsset(
-  node: Node,
-  options: CreateSceneRendererOptions,
-): Promise<ResolvedAsset> {
-  const resolvedAsset = await options.resolveAsset(node.assetId);
-  const validationDiagnostic = validateResolvedAsset(
-    node.assetId,
-    resolvedAsset,
+  updateGroundPlane(
+    context.surface.groundPlane,
+    context.options.visualization,
+    context.session.assetDefinitionsByNode,
   );
-
-  if (validationDiagnostic !== null) {
-    throw new SceneRendererDiagnosticError(validationDiagnostic);
-  }
-
-  return resolvedAsset;
+  renderSurface(context.surface);
 }
 
 async function prepareNodeAsset(
   node: Node,
-  options: CreateSceneRendererOptions,
-  surface: RenderingSurface,
-  isDisposed: () => boolean,
-): Promise<LoadedNodeAsset | null> {
-  const resolvedAsset = await resolveNodeAsset(node, options);
+  context: NodeLoadContext,
+): Promise<PreparedNodeAsset | null> {
+  const assetLoad = context.session.assets.load(node);
+  const resolvedAsset = await assetLoad.resolvedAsset;
 
-  if (isDisposed()) {
+  if (context.isDisposed()) {
     return null;
   }
 
-  surface.scene.add(createGroundPlane(node, resolvedAsset.definition));
-  renderSurface(surface);
-  const asset = await parseGlb(resolvedAsset.bytes);
-
-  if (isDisposed()) {
-    disposeObjectResources(asset);
-    return null;
-  }
-
-  return { asset, resolvedAsset };
+  applyResolvedAssetDefinition(node, resolvedAsset.definition, context);
+  return assetLoad.instantiate();
 }
 
 function completeNodeLoad(
   node: Node,
-  loadedAsset: LoadedNodeAsset,
+  loadedAsset: PreparedNodeAsset,
   surface: RenderingSurface,
-  store: SceneStateStore,
+  session: RendererSession,
 ): void {
+  removeAssetPlaceholder(node.id, surface, session);
   surface.scene.add(
     createPlacedAsset(
       node,
@@ -335,14 +210,13 @@ function completeNodeLoad(
     ),
   );
   renderSurface(surface);
-  store.setSnapshot({ diagnostics: [], status: "ready" });
 }
 
 function completePreparedNodeLoad(
   node: Node,
-  loadedAsset: LoadedNodeAsset | null,
+  loadedAsset: PreparedNodeAsset | null,
   surface: RenderingSurface,
-  store: SceneStateStore,
+  session: RendererSession,
   isDisposed: () => boolean,
 ): void {
   if (loadedAsset === null) {
@@ -350,32 +224,28 @@ function completePreparedNodeLoad(
   }
 
   if (isDisposed()) {
-    disposeObjectResources(loadedAsset.asset);
+    session.assets.complete(loadedAsset.asset);
     return;
   }
 
-  completeNodeLoad(node, loadedAsset, surface, store);
+  session.assets.complete(loadedAsset.asset);
+  completeNodeLoad(node, loadedAsset, surface, session);
 }
 
-function nodeLoadDiagnostic(
-  node: Node,
-  error: unknown,
-): SceneRendererDiagnostic {
-  return error instanceof SceneRendererDiagnosticError
-    ? error.diagnostic
-    : failedAssetDiagnostic(node, error);
-}
-
-function failNodeLoad(
+function reportRecoverableNodeFailure(
   node: Node,
   error: unknown,
   store: SceneStateStore,
   isDisposed: () => boolean,
 ): void {
   if (!isDisposed()) {
+    const snapshot = store.getSnapshot();
     store.setSnapshot({
-      diagnostics: [nodeLoadDiagnostic(node, error)],
-      status: "failed",
+      diagnostics: [
+        ...snapshot.diagnostics,
+        recoverableAssetDiagnostic(node, error),
+      ],
+      status: "loading",
     });
   }
 }
@@ -385,39 +255,34 @@ async function loadNode(
   options: CreateSceneRendererOptions,
   surface: RenderingSurface,
   store: SceneStateStore,
+  session: RendererSession,
   isDisposed: () => boolean,
 ): Promise<void> {
   try {
-    const loadedAsset = await prepareNodeAsset(
-      node,
-      options,
-      surface,
+    const context: NodeLoadContext = {
       isDisposed,
-    );
+      options,
+      session,
+      surface,
+    };
+    const loadedAsset = await prepareNodeAsset(node, context);
 
-    completePreparedNodeLoad(node, loadedAsset, surface, store, isDisposed);
+    completePreparedNodeLoad(node, loadedAsset, surface, session, isDisposed);
   } catch (error) {
-    failNodeLoad(node, error, store, isDisposed);
+    reportRecoverableNodeFailure(node, error, store, isDisposed);
   }
 }
 
-function disposeSurface(surface: RenderingSurface): void {
+function disposeSurface(
+  surface: RenderingSurface,
+  assetRoots: Iterable<Object3D>,
+): void {
   surface.resizeObserver.disconnect();
-  disposeObjectResources(surface.scene);
+  disposeObjectResourceRoots([surface.scene, ...assetRoots]);
   surface.webGlRenderer.renderLists.dispose();
   surface.webGlRenderer.dispose();
   surface.webGlRenderer.forceContextLoss();
   surface.canvas.remove();
-}
-
-function unsupportedNodeCountDiagnostic(
-  nodeCount: number,
-): SceneRendererDiagnostic {
-  return {
-    code: "unsupported-node-count",
-    message: `This renderer slice requires exactly one Node; received ${nodeCount}.`,
-    severity: "error",
-  };
 }
 
 function unsupportedConnectionsDiagnostic(
@@ -444,39 +309,71 @@ function rendererUnavailableDiagnostic(
 
 function deferFailedLifecycle(
   store: SceneStateStore,
-  diagnostic: SceneRendererDiagnostic,
+  diagnostics: readonly SceneRendererDiagnostic[],
   isDisposed: () => boolean,
 ): void {
   queueMicrotask(() => {
     if (!isDisposed()) {
       store.setSnapshot({
-        diagnostics: [diagnostic],
+        diagnostics,
         status: "failed",
       });
     }
   });
 }
 
-function findRenderableNode(
+function semanticDiagnostics(
   visualization: Visualization,
-): RenderableNodeResult {
-  const [node] = visualization.nodes;
+): SceneRendererDiagnostic[] {
+  return validateVisualizationSemantics(visualization).map((diagnostic) => ({
+    code:
+      diagnostic.severity === "error"
+        ? "visualization-invalid"
+        : "node-outside-group-bounds",
+    entityId: diagnostic.entityId,
+    message: diagnostic.message,
+    severity: diagnostic.severity,
+  }));
+}
 
-  if (node === undefined || visualization.nodes.length !== 1) {
-    return {
-      diagnostic: unsupportedNodeCountDiagnostic(visualization.nodes.length),
-    };
-  }
-
+function visualizationDiagnostics(
+  visualization: Visualization,
+): SceneRendererDiagnostic[] {
   if (visualization.connections.length > 0) {
-    return {
-      diagnostic: unsupportedConnectionsDiagnostic(
-        visualization.connections.length,
-      ),
-    };
+    return [unsupportedConnectionsDiagnostic(visualization.connections.length)];
   }
 
-  return { node };
+  return semanticDiagnostics(visualization);
+}
+
+function diagnosticsWithSeverity(
+  diagnostics: readonly SceneRendererDiagnostic[],
+  severity: SceneRendererDiagnostic["severity"],
+): SceneRendererDiagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.severity === severity);
+}
+
+async function loadNodes(
+  nodes: readonly Node[],
+  options: CreateSceneRendererOptions,
+  surface: RenderingSurface,
+  store: SceneStateStore,
+  session: RendererSession,
+): Promise<void> {
+  await Promise.all(
+    nodes.map((node) =>
+      loadNode(node, options, surface, store, session, () => {
+        return session.disposed;
+      }),
+    ),
+  );
+
+  if (!session.disposed) {
+    store.setSnapshot({
+      diagnostics: store.getSnapshot().diagnostics,
+      status: "ready",
+    });
+  }
 }
 
 function startSceneRendering(
@@ -484,14 +381,11 @@ function startSceneRendering(
   store: SceneStateStore,
   session: RendererSession,
 ): RenderingSurface | null {
-  const renderableNode = findRenderableNode(options.visualization);
+  const diagnostics = visualizationDiagnostics(options.visualization);
+  const fatalDiagnostics = diagnosticsWithSeverity(diagnostics, "error");
 
-  if ("diagnostic" in renderableNode) {
-    deferFailedLifecycle(
-      store,
-      renderableNode.diagnostic,
-      () => session.disposed,
-    );
+  if (fatalDiagnostics.length > 0) {
+    deferFailedLifecycle(store, fatalDiagnostics, () => session.disposed);
     return null;
   }
 
@@ -500,14 +394,31 @@ function startSceneRendering(
       options.container,
       options.visualization,
     );
-    void loadNode(renderableNode.node, options, surface, store, () => {
-      return session.disposed;
-    });
+    const recoverableDiagnostics = diagnosticsWithSeverity(
+      diagnostics,
+      "warning",
+    );
+
+    if (recoverableDiagnostics.length > 0) {
+      store.setSnapshot({
+        diagnostics: recoverableDiagnostics,
+        status: "loading",
+      });
+    }
+
+    addAssetPlaceholders(options.visualization.nodes, surface, session);
+    void loadNodes(
+      options.visualization.nodes,
+      options,
+      surface,
+      store,
+      session,
+    );
     return surface;
   } catch (error) {
     deferFailedLifecycle(
       store,
-      rendererUnavailableDiagnostic(error),
+      [rendererUnavailableDiagnostic(error)],
       () => session.disposed,
     );
     return null;
@@ -526,7 +437,7 @@ function disposeRendererSession(
   store.dispose();
 
   if (session.surface !== null) {
-    disposeSurface(session.surface);
+    disposeSurface(session.surface, session.assets.disposalRoots());
   }
 }
 
@@ -547,7 +458,16 @@ export function createSceneRenderer(
   options: CreateSceneRendererOptions,
 ): SceneRenderer {
   const store = createSceneStateStore();
-  const session: RendererSession = {
+  let session: RendererSession;
+
+  session = {
+    assetDefinitionsByNode: new Map(),
+    assets: createAssetSession({
+      isDisposed: () => session.disposed,
+      parseAsset: parseGlb,
+      resolveAsset: options.resolveAsset,
+    }),
+    placeholders: new Map(),
     disposed: false,
     surface: null,
   };

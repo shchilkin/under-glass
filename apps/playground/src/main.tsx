@@ -1,31 +1,160 @@
-import { StrictMode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { parseVisualization } from "@under-glass/core";
+import { parseVisualization, type Node } from "@under-glass/core";
 import {
   createSceneRenderer,
+  type ResolvedAsset,
   type SceneRendererSnapshot,
   type SceneRendererStatus,
 } from "@under-glass/three";
 
-import { resolveDemoAsset } from "./demo-asset.js";
+import { markDemoGlbAsCompressed, resolveDemoAsset } from "./demo-asset.js";
 import "./styles.css";
 
-const showUnsupportedConnection = new URLSearchParams(
-  window.location.search,
-).has("connections");
+const searchParameters = new URLSearchParams(window.location.search);
+const showUnsupportedConnection = searchParameters.has("connections");
+const scenario = searchParameters.get("scenario") ?? "single";
 
-const demoVisualization = parseVisualization({
-  schemaVersion: 1,
-  nodes: [
+function recoverableScenarioNodes(failure: string): Node[] {
+  return [
     {
-      id: "demo-node",
+      id: "healthy-node",
+      label: "Healthy Node",
+      assetId: "demo-system",
+      position: { x: -1.5, z: 0 },
+      quarterTurns: 0,
+    },
+    {
+      id: `${failure}-node`,
+      label: `${failure} Node`,
+      assetId: `${failure}-system`,
+      position: { x: 1.5, z: 0 },
+      quarterTurns: 0,
+    },
+  ];
+}
+
+const SINGLE_NODE: Node[] = [
+  {
+    id: "demo-node",
+    label: "Demo system",
+    assetId: "demo-system",
+    position: { x: 0, z: 0 },
+    quarterTurns: 1,
+  },
+];
+const SCENARIO_NODES: Readonly<Record<string, readonly Node[]>> = {
+  cache: [
+    {
+      id: "api",
+      label: "API",
+      assetId: "demo-system",
+      position: { x: -2.5, z: 0 },
+      quarterTurns: 0,
+    },
+    {
+      id: "worker",
+      label: "Worker",
+      assetId: "demo-system",
+      position: { x: 0, z: 0 },
+      quarterTurns: 1,
+    },
+    {
+      id: "database",
+      label: "Database",
+      assetId: "demo-system",
+      position: { x: 2.5, z: 0 },
+      quarterTurns: 2,
+    },
+  ],
+  compressed: recoverableScenarioNodes("compressed"),
+  invalid: [
+    {
+      id: "duplicate-node",
       label: "Demo system",
       assetId: "demo-system",
       position: { x: 0, z: 0 },
       quarterTurns: 1,
     },
+    {
+      id: "duplicate-node",
+      label: "Duplicate system",
+      assetId: "demo-system",
+      position: { x: 2, z: 0 },
+      quarterTurns: 0,
+    },
   ],
+  malformed: recoverableScenarioNodes("malformed"),
+  missing: recoverableScenarioNodes("missing"),
+  progressive: [
+    {
+      id: "frontend",
+      label: "Frontend",
+      assetId: "demo-system",
+      position: { x: -1.5, z: 0 },
+      quarterTurns: 0,
+    },
+    {
+      id: "slow-worker",
+      label: "Slow worker",
+      assetId: "slow-system",
+      position: { x: 1.5, z: 0 },
+      quarterTurns: 1,
+    },
+  ],
+};
+
+function createScenarioNodes(): Node[] {
+  return [...(SCENARIO_NODES[scenario] ?? SINGLE_NODE)];
+}
+
+const demoNodes = createScenarioNodes();
+
+async function resolveAliasedDemoAsset(
+  assetId: string,
+): Promise<ResolvedAsset> {
+  const resolvedAsset = await resolveDemoAsset("demo-system");
+
+  return {
+    bytes: resolvedAsset.bytes,
+    definition: {
+      ...resolvedAsset.definition,
+      assetId,
+    },
+  };
+}
+
+async function resolvePlaygroundAsset(assetId: string): Promise<ResolvedAsset> {
+  if (assetId === "slow-system") {
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 1_000);
+    });
+    return resolveAliasedDemoAsset(assetId);
+  }
+
+  if (assetId === "malformed-system") {
+    const resolvedAsset = await resolveAliasedDemoAsset(assetId);
+    return {
+      ...resolvedAsset,
+      bytes: new Uint8Array([1, 2, 3, 4]).buffer,
+    };
+  }
+
+  if (assetId === "compressed-system") {
+    const resolvedAsset = await resolveAliasedDemoAsset(assetId);
+    return {
+      ...resolvedAsset,
+      bytes: markDemoGlbAsCompressed(resolvedAsset.bytes),
+    };
+  }
+
+  return resolveDemoAsset(assetId);
+}
+
+const demoVisualization = parseVisualization({
+  schemaVersion: 1,
+  nodes: demoNodes,
   groups: [],
   connections: showUnsupportedConnection
     ? [
@@ -64,6 +193,7 @@ function App() {
   const [snapshot, setSnapshot] =
     useState<SceneRendererSnapshot>(loadingSnapshot);
   const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([]);
+  const [assetResolveCount, setAssetResolveCount] = useState(0);
 
   useEffect(() => {
     const container = sceneContainerRef.current;
@@ -74,7 +204,10 @@ function App() {
 
     const renderer = createSceneRenderer({
       container,
-      resolveAsset: resolveDemoAsset,
+      resolveAsset: async (assetId) => {
+        setAssetResolveCount((count) => count + 1);
+        return resolvePlaygroundAsset(assetId);
+      },
       visualization: demoVisualization,
     });
     const updateSnapshot = () => {
@@ -114,6 +247,14 @@ function App() {
           <dd>{demoVisualization.nodes[0]?.assetId}</dd>
         </div>
         <div>
+          <dt>Nodes</dt>
+          <dd data-testid="node-count">{demoVisualization.nodes.length}</dd>
+        </div>
+        <div>
+          <dt>Asset resolves</dt>
+          <dd data-testid="asset-resolve-count">{assetResolveCount}</dd>
+        </div>
+        <div>
           <dt>Lifecycle</dt>
           <dd>{statusHistory.join(" → ") || "Starting"}</dd>
         </div>
@@ -123,6 +264,9 @@ function App() {
           {snapshot.diagnostics.map((diagnostic) => (
             <li key={`${diagnostic.code}:${diagnostic.entityId ?? "scene"}`}>
               <code>{diagnostic.code}</code>
+              <span data-testid="diagnostic-severity">
+                {diagnostic.severity}
+              </span>
               <span>{diagnostic.message}</span>
             </li>
           ))}
@@ -138,8 +282,4 @@ if (!(rootElement instanceof HTMLElement)) {
   throw new Error("Under Glass playground root was not found.");
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+createRoot(rootElement).render(<App />);

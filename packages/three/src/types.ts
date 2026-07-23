@@ -9,9 +9,10 @@ export type SceneRendererStatus = "failed" | "loading" | "ready";
 export type SceneRendererDiagnosticCode =
   | "asset-definition-mismatch"
   | "asset-load-failed"
+  | "node-outside-group-bounds"
   | "renderer-unavailable"
   | "unsupported-connections"
-  | "unsupported-node-count";
+  | "visualization-invalid";
 
 export interface SceneRendererDiagnostic {
   readonly code: SceneRendererDiagnosticCode;

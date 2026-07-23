@@ -1,4 +1,54 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+
+interface SceneColorCounts {
+  readonly asset: number;
+  readonly placeholder: number;
+}
+
+async function sceneColorCounts(canvas: Locator): Promise<SceneColorCounts> {
+  const screenshot = await canvas.screenshot();
+  const dataUrl = `data:image/png;base64,${screenshot.toString("base64")}`;
+
+  return canvas.evaluate(async (_element, screenshotUrl) => {
+    const image = new Image();
+    image.src = screenshotUrl;
+    await image.decode();
+    const copy = document.createElement("canvas");
+    copy.width = image.naturalWidth;
+    copy.height = image.naturalHeight;
+    const context = copy.getContext("2d");
+
+    if (context === null) {
+      throw new Error("A 2D canvas context could not be created.");
+    }
+
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, copy.width, copy.height).data;
+    let asset = 0;
+    let placeholder = 0;
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const red = pixels[index] ?? 0;
+      const green = pixels[index + 1] ?? 0;
+      const blue = pixels[index + 2] ?? 0;
+
+      placeholder += Number(
+        Math.min(
+          red - 140,
+          green - 80,
+          red - green * 1.15,
+          green - blue * 1.15,
+        ) > 0,
+      );
+      asset += Number(
+        Math.min(blue - 110, green - 100, blue - red * 1.3, green - red * 1.3) >
+          0,
+      );
+    }
+
+    return { asset, placeholder };
+  }, dataUrl);
+}
 
 test("renders a host-resolved GLB through the public renderer boundary", async ({
   page,
@@ -33,6 +83,84 @@ test("renders a host-resolved GLB through the public renderer boundary", async (
     )
     .toBe(true);
   expect(glbRequests).toEqual([]);
+});
+
+test("renders multiple Nodes while resolving a repeated Asset ID once", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=cache");
+
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("node-count")).toHaveText("3");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("1");
+  await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+    1,
+  );
+});
+
+test("replaces progressive Placeholders without waiting for slower Nodes", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=progressive");
+
+  await expect(page.getByText("loading", { exact: true })).toBeVisible();
+  const canvas = page.locator("canvas[data-under-glass-renderer]");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("2");
+  await expect
+    .poll(async () => (await sceneColorCounts(canvas)).asset)
+    .toBeGreaterThan(50);
+  await expect
+    .poll(async () => (await sceneColorCounts(canvas)).placeholder)
+    .toBeGreaterThan(50);
+
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => (await sceneColorCounts(canvas)).placeholder)
+    .toBeLessThan(10);
+});
+
+for (const failure of ["missing", "malformed", "compressed"] as const) {
+  test(`keeps the scene ready with a Placeholder for a ${failure} asset`, async ({
+    page,
+  }) => {
+    await page.goto(`/?scenario=${failure}`);
+
+    await expect(
+      page.getByText("loading → ready", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("asset-load-failed", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByTestId("diagnostic-severity")).toHaveText("warning");
+    await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+      1,
+    );
+    const canvas = page.locator("canvas[data-under-glass-renderer]");
+    const colors = await sceneColorCounts(canvas);
+
+    expect(colors.asset).toBeGreaterThan(50);
+    expect(colors.placeholder).toBeGreaterThan(50);
+  });
+}
+
+test("fails a semantically invalid Visualization before rendering", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=invalid");
+
+  await expect(
+    page.getByText("loading → failed", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("visualization-invalid", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+    0,
+  );
 });
 
 test("reports a stable failed lifecycle when WebGL2 is unavailable", async ({
