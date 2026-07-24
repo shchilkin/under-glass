@@ -45,13 +45,11 @@ function styleLabel(
     element.style.textShadow =
       "0 2px 4px rgb(0 0 0 / 95%), 0 5px 12px rgb(0 0 0 / 60%)";
   } else if (type === "group") {
-    element.style.color = "#89978f";
-    element.style.fontFamily =
-      'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
-    element.style.fontSize = "13px";
-    element.style.fontWeight = "700";
-    element.style.letterSpacing = "0.1em";
-    element.style.textTransform = "uppercase";
+    element.dataset.underGlassLabelRendering = "world-space";
+    element.style.width = "1px";
+    element.style.height = "1px";
+    element.style.overflow = "hidden";
+    element.style.clipPath = "inset(50%)";
   } else {
     element.style.padding = "2px 5px";
     element.style.borderRadius = "3px";

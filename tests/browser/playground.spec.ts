@@ -224,6 +224,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
   );
   await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(3);
   await expect(
+    page.locator('[data-under-glass-label="group"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(
     page.locator('[data-under-glass-label="connection"]'),
   ).toHaveCount(7);
   await expect(
@@ -280,6 +283,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
   await expect(page.getByTestId("asset-resolve-count")).toHaveText("8");
   await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(11);
   await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(5);
+  await expect(
+    page.locator('[data-under-glass-label="group"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
   await expect(
     page.locator('[data-under-glass-label="connection"]'),
   ).toHaveCount(6);

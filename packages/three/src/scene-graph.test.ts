@@ -100,6 +100,10 @@ describe("project graph presentation", () => {
     const surface = meshNamed(presentation, "Group Surface");
     const border = presentation.getObjectByName("Group Border");
 
+    expect(presentation.userData.groupLabel).toEqual({
+      rendering: "world-space",
+      text: "Core",
+    });
     expect(surface.rotation.x).toBeCloseTo(-Math.PI / 2, 6);
     expect(surface.receiveShadow).toBe(true);
     expect((surface.material as MeshStandardMaterial).color.getHex()).toBe(

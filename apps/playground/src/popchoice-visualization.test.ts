@@ -136,7 +136,7 @@ describe("PopChoice preset views", () => {
     expect(visualization.groups.map((group) => group.label)).toEqual([
       "Operations",
       "Platform Data",
-      "External Providers",
+      "Providers",
       "Runtime Signals",
       "Observability",
     ]);

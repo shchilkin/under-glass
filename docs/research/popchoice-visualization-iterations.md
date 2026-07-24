@@ -119,12 +119,33 @@ What remains imperfect:
 - The shared source model is fixture code, not a reusable public Source Graph package.
 - Visual acceptance still requires owner review; passing browser tests is not an artistic sign-off.
 
+### 6. Put zone typography into the 3D world
+
+What changed:
+
+- Group names now render as transparent texture planes inside their zone surfaces.
+- Zone typography follows the ground-plane perspective during camera motion.
+- Node and Connection labels remain screen-space overlays.
+- Visually hidden Group text remains in the semantic overlay for accessibility.
+
+What works:
+
+- Zone names now feel printed into the architecture instead of floating above it.
+- The transition between isometric and top cameras has one coherent spatial model.
+- Entity labels keep a stable readable size while structural labels communicate depth.
+
+What we deliberately did not do:
+
+- Applying perspective to every label. Node names and route captions became too important to risk foreshortening or small text at oblique angles.
+- Adding a schema-level label mode before the mixed world-space/screen-space treatment is validated across more projects.
+
 ## Current decisions
 
 - The default PopChoice preset is `Recommendation`.
 - `Operations` is a second view, not an expanded default.
 - Both views derive from shared host-side templates and retain stable semantic IDs.
 - Layout, grouping, visible labels, and Opening View belong to a preset view.
+- Group names use world-space typography; Node and Connection labels remain screen-space.
 - The public API continues to accept one concrete `Visualization`.
 - A public Source Graph or View abstraction remains deferred until more real projects validate the pattern.
 - Realtime collaboration, version history, free camera, and editor work remain outside this prototype.

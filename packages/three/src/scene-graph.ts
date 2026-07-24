@@ -1,5 +1,6 @@
 import {
   BufferGeometry,
+  CanvasTexture,
   ConeGeometry,
   CylinderGeometry,
   Group as ThreeGroup,
@@ -7,8 +8,10 @@ import {
   LineLoop,
   LineSegments,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  SRGBColorSpace,
   SphereGeometry,
   Vector3,
   type Material,
@@ -43,6 +46,7 @@ export const DEFAULT_SCENE_THEME = {
 
 interface GroupTreatment {
   readonly border: number;
+  readonly label: string;
   readonly surface: number;
 }
 
@@ -50,6 +54,7 @@ function groupTreatment(group: Group): GroupTreatment {
   if (group.styleKey === "runtime") {
     return {
       border: DEFAULT_SCENE_THEME.groupRuntimeBorder,
+      label: "#b5d0c2",
       surface: DEFAULT_SCENE_THEME.groupRuntimeSurface,
     };
   }
@@ -57,6 +62,7 @@ function groupTreatment(group: Group): GroupTreatment {
   if (group.styleKey === "data") {
     return {
       border: DEFAULT_SCENE_THEME.groupDataBorder,
+      label: "#b5c9cb",
       surface: DEFAULT_SCENE_THEME.groupDataSurface,
     };
   }
@@ -64,6 +70,7 @@ function groupTreatment(group: Group): GroupTreatment {
   if (group.styleKey === "external") {
     return {
       border: DEFAULT_SCENE_THEME.groupExternalBorder,
+      label: "#d0c3a0",
       surface: DEFAULT_SCENE_THEME.groupExternalSurface,
     };
   }
@@ -71,6 +78,7 @@ function groupTreatment(group: Group): GroupTreatment {
   if (group.styleKey === "operations") {
     return {
       border: DEFAULT_SCENE_THEME.groupOperationsBorder,
+      label: "#c6b9d5",
       surface: DEFAULT_SCENE_THEME.groupOperationsSurface,
     };
   }
@@ -78,14 +86,136 @@ function groupTreatment(group: Group): GroupTreatment {
   if (group.styleKey === "observability") {
     return {
       border: DEFAULT_SCENE_THEME.groupObservabilityBorder,
+      label: "#d1aea3",
       surface: DEFAULT_SCENE_THEME.groupObservabilitySurface,
     };
   }
 
   return {
     border: DEFAULT_SCENE_THEME.groupBorder,
+    label: "#b5d0c2",
     surface: DEFAULT_SCENE_THEME.groupSurface,
   };
+}
+
+const GROUP_LABEL_CANVAS_HEIGHT = 128;
+const GROUP_LABEL_FONT_SIZE = 54;
+const GROUP_LABEL_TRACKING = 7;
+const GROUP_LABEL_WORLD_HEIGHT = 0.8;
+const GROUP_LABEL_WORLD_MARGIN = 0.42;
+
+function trackedTextWidth(
+  context: CanvasRenderingContext2D,
+  text: string,
+): number {
+  const glyphWidth = [...text].reduce(
+    (width, glyph) => width + context.measureText(glyph).width,
+    0,
+  );
+  return glyphWidth + Math.max(0, text.length - 1) * GROUP_LABEL_TRACKING;
+}
+
+function drawTrackedText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+): void {
+  let cursor = x;
+
+  for (const glyph of text) {
+    context.fillText(glyph, cursor, y);
+    cursor += context.measureText(glyph).width + GROUP_LABEL_TRACKING;
+  }
+}
+
+function createGroupLabelTexture(
+  text: string,
+  color: string,
+): CanvasTexture | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (context === null) {
+    return null;
+  }
+
+  context.font = `700 ${GROUP_LABEL_FONT_SIZE}px Inter, ui-sans-serif, system-ui, sans-serif`;
+  const uppercaseText = text.toUpperCase();
+  const horizontalPadding = 28;
+  canvas.width = Math.ceil(
+    trackedTextWidth(context, uppercaseText) + horizontalPadding * 2,
+  );
+  canvas.height = GROUP_LABEL_CANVAS_HEIGHT;
+
+  context.font = `700 ${GROUP_LABEL_FONT_SIZE}px Inter, ui-sans-serif, system-ui, sans-serif`;
+  context.fillStyle = color;
+  context.textBaseline = "middle";
+  drawTrackedText(
+    context,
+    uppercaseText,
+    horizontalPadding,
+    GROUP_LABEL_CANVAS_HEIGHT / 2,
+  );
+
+  const texture = new CanvasTexture(canvas);
+  texture.anisotropy = 4;
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+function addGroupLabel(
+  root: ThreeGroup,
+  group: Group,
+  treatment: GroupTreatment,
+): void {
+  const text = group.label ?? group.id;
+  const texture = createGroupLabelTexture(text, treatment.label);
+
+  root.userData.groupLabel = {
+    rendering: "world-space",
+    text,
+  };
+
+  if (texture === null) {
+    return;
+  }
+
+  const groupWidth = group.bounds.maxX - group.bounds.minX;
+  const horizontalMargin = Math.min(
+    GROUP_LABEL_WORLD_MARGIN,
+    groupWidth * 0.15,
+  );
+  const availableWidth = groupWidth - horizontalMargin * 2;
+  const textureAspect =
+    (texture.image as HTMLCanvasElement).width /
+    (texture.image as HTMLCanvasElement).height;
+  const naturalWidth = GROUP_LABEL_WORLD_HEIGHT * textureAspect;
+  const labelWidth = Math.min(availableWidth, naturalWidth);
+  const labelHeight = labelWidth / textureAspect;
+  const label = addMesh(
+    root,
+    new PlaneGeometry(labelWidth, labelHeight),
+    new MeshBasicMaterial({
+      depthWrite: false,
+      map: texture,
+      opacity: 0.9,
+      toneMapped: false,
+      transparent: true,
+    }),
+    [
+      group.bounds.minX + horizontalMargin + labelWidth / 2,
+      0.032,
+      group.bounds.minZ + GROUP_LABEL_WORLD_MARGIN + labelHeight / 2,
+    ],
+  );
+  label.name = "Group Label";
+  label.rotation.x = -Math.PI / 2;
+  label.userData.text = text;
 }
 
 interface RouteTreatment {
@@ -225,6 +355,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
   surface.name = "Group Surface";
   surface.rotation.x = -Math.PI / 2;
   surface.receiveShadow = true;
+  addGroupLabel(root, group, treatment);
 
   const borderPoints = [
     new Vector3(group.bounds.minX, 0.018, group.bounds.minZ),
