@@ -230,6 +230,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
     page.locator('[data-under-glass-label="connection"]'),
   ).toHaveCount(7);
   await expect(
+    page.locator('[data-under-glass-label="connection"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(
     page.locator('[data-under-glass-label="node"]', { hasText: "PopChoice" }),
   ).toHaveCount(0);
   await expect(
@@ -289,6 +292,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
   await expect(
     page.locator('[data-under-glass-label="connection"]'),
   ).toHaveCount(6);
+  await expect(
+    page.locator('[data-under-glass-label="connection"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
   await expect
     .poll(() => new URL(page.url()).searchParams.get("view"))
     .toBe("operations");

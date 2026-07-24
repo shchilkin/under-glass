@@ -158,6 +158,10 @@ describe("project graph presentation", () => {
     const presentation = createConnectionRoute(route);
     const arrow = meshNamed(presentation, "Forward Arrow");
 
+    expect(presentation.userData.routeLabel).toEqual({
+      rendering: "world-space",
+      text: "Request",
+    });
     expect(arrow.position.x).toBeCloseTo(1.94, 6);
     expect(arrow.position.z).toBeCloseTo(0, 6);
     expect(presentation.getObjectByName("Backward Arrow")).toBeUndefined();

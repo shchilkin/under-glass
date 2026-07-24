@@ -104,6 +104,29 @@ const GROUP_LABEL_TRACKING = 7;
 const GROUP_LABEL_WORLD_HEIGHT = 0.8;
 const GROUP_LABEL_WORLD_MARGIN = 0.42;
 
+interface CanvasDrawingSurface {
+  readonly canvas: HTMLCanvasElement;
+  readonly context: CanvasRenderingContext2D;
+}
+
+function createCanvasDrawingSurface(): CanvasDrawingSurface | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  return context === null ? null : { canvas, context };
+}
+
+function textureFromCanvas(canvas: HTMLCanvasElement): CanvasTexture {
+  const texture = new CanvasTexture(canvas);
+  texture.anisotropy = 4;
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
 function trackedTextWidth(
   context: CanvasRenderingContext2D,
   text: string,
@@ -133,17 +156,13 @@ function createGroupLabelTexture(
   text: string,
   color: string,
 ): CanvasTexture | null {
-  if (typeof document === "undefined") {
+  const surface = createCanvasDrawingSurface();
+
+  if (surface === null) {
     return null;
   }
 
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (context === null) {
-    return null;
-  }
-
+  const { canvas, context } = surface;
   context.font = `700 ${GROUP_LABEL_FONT_SIZE}px Inter, ui-sans-serif, system-ui, sans-serif`;
   const uppercaseText = text.toUpperCase();
   const horizontalPadding = 28;
@@ -162,10 +181,7 @@ function createGroupLabelTexture(
     GROUP_LABEL_CANVAS_HEIGHT / 2,
   );
 
-  const texture = new CanvasTexture(canvas);
-  texture.anisotropy = 4;
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
+  return textureFromCanvas(canvas);
 }
 
 function addGroupLabel(
@@ -215,6 +231,11 @@ function addGroupLabel(
   );
   label.name = "Group Label";
   label.rotation.x = -Math.PI / 2;
+  label.userData.labelBounds = {
+    depth: labelHeight,
+    width: labelWidth,
+  };
+  label.userData.labelRole = "group";
   label.userData.text = text;
 }
 
@@ -223,6 +244,7 @@ interface RouteTreatment {
   readonly arrowRadius: number;
   readonly color: number;
   readonly emissiveIntensity: number;
+  readonly labelColor: string;
   readonly metalness: number;
   readonly radius: number;
   readonly roughness: number;
@@ -235,6 +257,7 @@ function routeTreatment(route: BasicConnectionRoute): RouteTreatment {
       arrowRadius: 0.095,
       color: DEFAULT_SCENE_THEME.supportingConnection,
       emissiveIntensity: 0.04,
+      labelColor: "#d1dcd6",
       metalness: 0.1,
       radius: 0.03,
       roughness: 0.65,
@@ -247,6 +270,7 @@ function routeTreatment(route: BasicConnectionRoute): RouteTreatment {
       arrowRadius: 0.105,
       color: DEFAULT_SCENE_THEME.secondaryConnection,
       emissiveIntensity: 0.08,
+      labelColor: "#e4b8ad",
       metalness: 0.1,
       radius: 0.034,
       roughness: 0.65,
@@ -258,6 +282,7 @@ function routeTreatment(route: BasicConnectionRoute): RouteTreatment {
     arrowRadius: 0.14,
     color: DEFAULT_SCENE_THEME.connection,
     emissiveIntensity: 0.28,
+    labelColor: "#d9f2e5",
     metalness: 0.25,
     radius: 0.052,
     roughness: 0.4,
@@ -401,6 +426,192 @@ function createRouteArrow(
   arrow.position.addScaledVector(direction, -height * 0.1875);
 }
 
+const ROUTE_LABEL_CANVAS_HEIGHT = 96;
+const ROUTE_LABEL_FONT_SIZE = 40;
+const ROUTE_LABEL_WORLD_HEIGHT = 0.66;
+
+function createRouteLabelTexture(
+  text: string,
+  color: string,
+): CanvasTexture | null {
+  const surface = createCanvasDrawingSurface();
+
+  if (surface === null) {
+    return null;
+  }
+
+  const { canvas, context } = surface;
+  const horizontalPadding = 22;
+  context.font = `700 ${ROUTE_LABEL_FONT_SIZE}px "SFMono-Regular", Consolas, "Liberation Mono", monospace`;
+  canvas.width = Math.ceil(
+    context.measureText(text).width + horizontalPadding * 2,
+  );
+  canvas.height = ROUTE_LABEL_CANVAS_HEIGHT;
+
+  context.fillStyle = "rgb(7 11 9 / 92%)";
+  context.beginPath();
+  context.roundRect(2, 2, canvas.width - 4, canvas.height - 4, 14);
+  context.fill();
+  context.strokeStyle = "rgb(233 239 235 / 18%)";
+  context.lineWidth = 2;
+  context.stroke();
+
+  context.font = `700 ${ROUTE_LABEL_FONT_SIZE}px "SFMono-Regular", Consolas, "Liberation Mono", monospace`;
+  context.fillStyle = color;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  return textureFromCanvas(canvas);
+}
+
+interface RouteLabelPlacement {
+  readonly position: Vector3;
+  readonly quarterTurn: boolean;
+}
+
+interface RouteSegment {
+  readonly end: Vector3;
+  readonly length: number;
+  readonly start: Vector3;
+}
+
+function longestRouteSegment(points: readonly Vector3[]): RouteSegment | null {
+  let longest: RouteSegment | null = null;
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+
+    if (start !== undefined && end !== undefined) {
+      const length = start.distanceTo(end);
+
+      if (longest === null || length > longest.length) {
+        longest = { end, length, start };
+      }
+    }
+  }
+
+  return longest;
+}
+
+function connectionLabelSlot(connectionId: string): number {
+  const hash = [...connectionId].reduce(
+    (value, character) => (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
+    0,
+  );
+  return hash % 5;
+}
+
+function positionRouteLabel(
+  segment: RouteSegment,
+  quarterTurn: boolean,
+  slot: number,
+  useLanes: boolean,
+): Vector3 {
+  const progress = quarterTurn ? 0.3 : 0.3 + slot * 0.1;
+  const laneOffset = useLanes ? ([-0.68, 0, 0.68, -0.34, 0.34][slot] ?? 0) : 0;
+  const position = segment.start
+    .clone()
+    .lerp(segment.end, progress)
+    .setY(0.235);
+
+  if (quarterTurn) {
+    position.x += 0.32 + laneOffset;
+  } else {
+    position.z += laneOffset - 0.32;
+  }
+
+  return position;
+}
+
+function routeLabelPlacement(
+  connectionId: string,
+  points: readonly Vector3[],
+  useLanes: boolean,
+): RouteLabelPlacement | null {
+  const longest = longestRouteSegment(points);
+
+  if (longest === null) {
+    return null;
+  }
+
+  const quarterTurn =
+    Math.abs(longest.end.z - longest.start.z) >
+    Math.abs(longest.end.x - longest.start.x);
+
+  return {
+    position: positionRouteLabel(
+      longest,
+      quarterTurn,
+      connectionLabelSlot(connectionId),
+      useLanes,
+    ),
+    quarterTurn,
+  };
+}
+
+function addRouteLabel(
+  root: ThreeGroup,
+  route: BasicConnectionRoute,
+  points: readonly Vector3[],
+  treatment: RouteTreatment,
+): void {
+  if (route.label.length === 0) {
+    return;
+  }
+
+  const placement = routeLabelPlacement(
+    route.connectionId,
+    points,
+    route.styleKey === "supporting" || route.styleKey === "telemetry",
+  );
+
+  root.userData.routeLabel = {
+    rendering: "world-space",
+    text: route.label,
+  };
+
+  if (placement === null) {
+    return;
+  }
+
+  const texture = createRouteLabelTexture(route.label, treatment.labelColor);
+
+  if (texture === null) {
+    return;
+  }
+
+  const textureAspect =
+    (texture.image as HTMLCanvasElement).width /
+    (texture.image as HTMLCanvasElement).height;
+  const labelWidth = ROUTE_LABEL_WORLD_HEIGHT * textureAspect;
+  const label = addMesh(
+    root,
+    new PlaneGeometry(labelWidth, ROUTE_LABEL_WORLD_HEIGHT),
+    new MeshBasicMaterial({
+      depthWrite: false,
+      map: texture,
+      toneMapped: false,
+      transparent: true,
+    }),
+    [placement.position.x, placement.position.y, placement.position.z],
+  );
+  label.name = "Route Label";
+  label.rotation.x = -Math.PI / 2;
+  label.userData.labelBounds = {
+    depth: placement.quarterTurn ? labelWidth : ROUTE_LABEL_WORLD_HEIGHT,
+    width: placement.quarterTurn ? ROUTE_LABEL_WORLD_HEIGHT : labelWidth,
+  };
+  label.userData.labelRole = "connection";
+
+  if (placement.quarterTurn) {
+    label.rotateZ(Math.PI / 2);
+  }
+
+  label.userData.text = route.label;
+}
+
 export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
   const root = new ThreeGroup();
   const points = route.points.map(
@@ -488,6 +699,7 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
     );
   }
 
+  addRouteLabel(root, route, points, treatment);
   root.name = `Connection ${route.connectionId}`;
   return root;
 }

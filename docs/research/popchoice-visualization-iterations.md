@@ -134,10 +134,27 @@ What works:
 - The transition between isometric and top cameras has one coherent spatial model.
 - Entity labels keep a stable readable size while structural labels communicate depth.
 
-What we deliberately did not do:
+What we deliberately deferred in this iteration:
 
-- Applying perspective to every label. Node names and route captions became too important to risk foreshortening or small text at oblique angles.
+- Applying perspective to every label at once. Route captions moved into world space only in the next isolated experiment, while Node names remain screen-space.
 - Adding a schema-level label mode before the mixed world-space/screen-space treatment is validated across more projects.
+
+### 7. Align Connection captions with their routes
+
+What changed:
+
+- Connection captions now render as compact world-space nameplates.
+- Each caption sits on the longest orthogonal segment and rotates with that segment.
+- Deterministic lanes and a world-space collision pass separate captions that share route geometry.
+- Caption scale decreases continuously as the camera approaches Top and grows again toward Isometric.
+- Primary, supporting, and telemetry captions inherit distinct restrained text colors.
+- Semantic Connection text remains in the visually hidden HTML overlay.
+
+What this tests:
+
+- Whether route captions can join the 3D composition without losing the quick badge-like recognition of `HTTPS`, `Jobs`, and `Persist`.
+- Whether the same caption placement remains useful in isometric and top cameras.
+- Whether Node names should remain the final screen-space typography layer.
 
 ## Current decisions
 
@@ -145,7 +162,7 @@ What we deliberately did not do:
 - `Operations` is a second view, not an expanded default.
 - Both views derive from shared host-side templates and retain stable semantic IDs.
 - Layout, grouping, visible labels, and Opening View belong to a preset view.
-- Group names use world-space typography; Node and Connection labels remain screen-space.
+- Group names and Connection captions use world-space typography; Node labels remain screen-space.
 - The public API continues to accept one concrete `Visualization`.
 - A public Source Graph or View abstraction remains deferred until more real projects validate the pattern.
 - Realtime collaboration, version history, free camera, and editor work remain outside this prototype.

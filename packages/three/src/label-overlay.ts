@@ -51,14 +51,11 @@ function styleLabel(
     element.style.overflow = "hidden";
     element.style.clipPath = "inset(50%)";
   } else {
-    element.style.padding = "2px 5px";
-    element.style.borderRadius = "3px";
-    element.style.color = "#d0d9d4";
-    element.style.background = "rgb(8 12 11 / 90%)";
-    element.style.fontFamily =
-      '"SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace';
-    element.style.fontSize = "10px";
-    element.style.fontWeight = "600";
+    element.dataset.underGlassLabelRendering = "world-space";
+    element.style.width = "1px";
+    element.style.height = "1px";
+    element.style.overflow = "hidden";
+    element.style.clipPath = "inset(50%)";
   }
 }
 

@@ -379,13 +379,13 @@ const RECOMMENDATION_VIEW: PopChoiceViewSpec = {
     {
       id: "recommendation-runtime",
       label: "Recommendation Runtime",
-      bounds: { minX: -6.4, minZ: -2.4, maxX: 2.4, maxZ: 1.5 },
+      bounds: { minX: -6.4, minZ: -3.4, maxX: 2.4, maxZ: 1.5 },
       styleKey: "runtime",
     },
     {
       id: "recommendation-data",
       label: "Data",
-      bounds: { minX: 3.6, minZ: -2.4, maxX: 6.4, maxZ: 1.5 },
+      bounds: { minX: 3.6, minZ: -3.4, maxX: 6.4, maxZ: 1.5 },
       styleKey: "data",
     },
     {
