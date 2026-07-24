@@ -17,12 +17,13 @@ import {
 } from "@under-glass/three";
 
 import { markDemoGlbAsCompressed, resolveDemoAsset } from "./demo-asset.js";
-import { PROJECT_GRAPH_VISUALIZATION } from "./project-graph-fixture.js";
+import { POPCHOICE_VISUALIZATION } from "./popchoice-visualization.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
 const showConnection = searchParameters.has("connections");
 const scenario = searchParameters.get("scenario") ?? "graph";
+const showPopChoiceVisualization = scenario === "graph" && !showConnection;
 const CAMERA_MOTIONS: readonly CameraMotion[] = ["responsive", "spring"];
 const requestedCameraMotion = searchParameters.get("motion");
 const initialCameraMotion: CameraMotion =
@@ -213,8 +214,8 @@ async function resolvePlaygroundAsset(assetId: string): Promise<ResolvedAsset> {
 }
 
 function createDemoVisualization(): Visualization {
-  if (scenario === "graph" && !showConnection) {
-    return PROJECT_GRAPH_VISUALIZATION;
+  if (showPopChoiceVisualization) {
+    return POPCHOICE_VISUALIZATION;
   }
 
   return parseVisualization({
@@ -256,11 +257,11 @@ function appendStatus(
   return history.at(-1) === status ? history : [...history, status];
 }
 
-function presentationForScenario(currentScenario: string): {
+function presentationForScenario(isPopChoiceVisualization: boolean): {
   readonly className: string;
   readonly lede: string;
 } {
-  return currentScenario === "graph"
+  return isPopChoiceVisualization
     ? {
         className: "app app--graph",
         lede: "Recommendation runtime · web, queues, workers, data and observability.",
@@ -376,11 +377,11 @@ function SceneMetrics({
   );
 }
 
-function sceneMetricSubject(currentScenario: string): {
+function sceneMetricSubject(isPopChoiceVisualization: boolean): {
   readonly label: string;
   readonly value: string | undefined;
 } {
-  if (currentScenario === "graph") {
+  if (isPopChoiceVisualization) {
     return { label: "Visualization", value: "PopChoice" };
   }
 
@@ -477,8 +478,8 @@ function App() {
     );
     setCameraMotion(motion);
   };
-  const presentation = presentationForScenario(scenario);
-  const metricSubject = sceneMetricSubject(scenario);
+  const presentation = presentationForScenario(showPopChoiceVisualization);
+  const metricSubject = sceneMetricSubject(showPopChoiceVisualization);
 
   return (
     <main className={presentation.className}>
@@ -486,7 +487,9 @@ function App() {
         <div className="app-title">
           <p className="eyebrow">Under Glass</p>
           <h1>
-            {scenario === "graph" ? "PopChoice architecture" : "Under Glass"}
+            {showPopChoiceVisualization
+              ? "PopChoice architecture"
+              : "Under Glass"}
           </h1>
           <p className="lede">{presentation.lede}</p>
         </div>

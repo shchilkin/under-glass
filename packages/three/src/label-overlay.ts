@@ -7,6 +7,7 @@ import {
   labelRectangle,
   type LabelPoint,
   type LabelRectangle,
+  type LabelSize,
 } from "./label-layout.js";
 
 interface ProjectedLabel {
@@ -145,9 +146,9 @@ interface ProjectedScreenLabel {
 function projectLabel(
   label: ProjectedLabel,
   camera: OrthographicCamera,
-  width: number,
-  height: number,
+  viewport: LabelSize,
 ): ProjectedScreenLabel {
+  const { height, width } = viewport;
   const projectedCandidates = label.points.map((point) =>
     point.clone().project(camera),
   );
@@ -218,8 +219,7 @@ function placeStaticLabels(
 function placeConnectionLabels(
   projectedLabels: readonly ProjectedScreenLabel[],
   occupied: LabelRectangle[],
-  width: number,
-  height: number,
+  viewport: LabelSize,
 ): void {
   for (const projected of projectedLabels) {
     if (projected.hidden || projected.label.type !== "connection") {
@@ -231,7 +231,7 @@ function placeConnectionLabels(
       projected.position,
       { height: element.offsetHeight, width: element.offsetWidth },
       occupied,
-      { height, width },
+      viewport,
     );
     const placed = { ...projected, position };
 
@@ -247,8 +247,9 @@ function renderLabels(
 ): void {
   const width = container.clientWidth;
   const height = container.clientHeight;
+  const viewport = { height, width };
   const projectedLabels = labels.map((label) =>
-    projectLabel(label, camera, width, height),
+    projectLabel(label, camera, viewport),
   );
   const occupied: LabelRectangle[] = [];
 
@@ -257,7 +258,7 @@ function renderLabels(
   }
 
   placeStaticLabels(projectedLabels, occupied);
-  placeConnectionLabels(projectedLabels, occupied, width, height);
+  placeConnectionLabels(projectedLabels, occupied, viewport);
 }
 
 function removeLabels(labels: readonly ProjectedLabel[]): void {

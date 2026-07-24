@@ -200,7 +200,7 @@ test("renders basic Connections instead of failing the scene", async ({
   );
 });
 
-test("renders the canonical project graph in both camera modes", async ({
+test("renders the canonical PopChoice Visualization in both camera modes", async ({
   page,
 }) => {
   await page.goto("/");

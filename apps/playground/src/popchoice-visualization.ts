@@ -5,7 +5,7 @@ import { parseVisualization, type Visualization } from "@under-glass/core";
  * runtime. Delivery infrastructure is intentionally omitted so the primary
  * recommendation flow remains legible.
  */
-export const PROJECT_GRAPH_VISUALIZATION: Visualization = parseVisualization({
+export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
   schemaVersion: 1,
   nodes: [
     {
@@ -91,14 +91,14 @@ export const PROJECT_GRAPH_VISUALIZATION: Visualization = parseVisualization({
       id: "openai-api",
       label: "OpenAI API",
       assetId: "provider-asset",
-      position: { x: 5.75, z: -3.5 },
+      position: { x: 5.75, z: -6 },
       quarterTurns: 0,
     },
     {
       id: "tmdb-api",
       label: "TMDB API",
       assetId: "provider-asset",
-      position: { x: 5.75, z: 1 },
+      position: { x: 5.75, z: 5.5 },
       quarterTurns: 0,
     },
   ],
@@ -184,7 +184,7 @@ export const PROJECT_GRAPH_VISUALIZATION: Visualization = parseVisualization({
       label: "Enqueue work",
       source: { nodeId: "backoffice" },
       target: { nodeId: "redis" },
-      direction: "oneWay",
+      direction: "bidirectional",
       routeAnchors: [],
     },
     {
@@ -192,7 +192,7 @@ export const PROJECT_GRAPH_VISUALIZATION: Visualization = parseVisualization({
       label: "Queue inspection",
       source: { nodeId: "bull-board" },
       target: { nodeId: "redis" },
-      direction: "bidirectional",
+      direction: "oneWay",
       routeAnchors: [],
     },
     {
