@@ -11,6 +11,11 @@ import {
   createViewerControllerWithRenderer,
   type SceneRendererFactory,
 } from "./viewer-controller.js";
+import type {
+  ViewerSemanticLayer,
+  ViewerSemanticLayerFactory,
+} from "./semantic-layer.js";
+import type { ViewerAccessibility } from "./semantic-graph.js";
 
 const FIRST_VISUALIZATION = {
   schemaVersion: 1,
@@ -32,6 +37,11 @@ const SECOND_VISUALIZATION = {
     cameraMode: "top",
   },
 } satisfies Visualization;
+
+const ACCESSIBILITY: ViewerAccessibility = {
+  resolveEntityLabel: ({ id, kind }) => `${kind}:${id}`,
+  sceneLabel: "Test architecture",
+};
 
 interface RendererHarness {
   readonly emit: (snapshot: SceneRendererSnapshot) => void;
@@ -70,13 +80,41 @@ function createRendererHarness(): RendererHarness {
   };
 }
 
+interface SemanticLayerHarness {
+  readonly layer: ViewerSemanticLayer;
+  readonly rendererSnapshots: SceneRendererSnapshot[];
+  readonly semanticGraphs: unknown[];
+}
+
+function createSemanticLayerHarness(): SemanticLayerHarness {
+  const rendererSnapshots: SceneRendererSnapshot[] = [];
+  const semanticGraphs: unknown[] = [];
+
+  return {
+    layer: {
+      dispose: vi.fn(),
+      setGraph(graph): void {
+        semanticGraphs.push(graph);
+      },
+      setRendererSnapshot(snapshot): void {
+        rendererSnapshots.push(snapshot);
+      },
+    },
+    rendererSnapshots,
+    semanticGraphs,
+  };
+}
+
 function createHarnessFactory(): {
   readonly createRenderer: SceneRendererFactory;
   readonly harnesses: RendererHarness[];
   readonly options: CreateSceneRendererOptions[];
+  readonly semanticHarness: SemanticLayerHarness;
+  readonly semanticLayerFactory: ViewerSemanticLayerFactory;
 } {
   const harnesses: RendererHarness[] = [];
   const rendererOptions: CreateSceneRendererOptions[] = [];
+  const semanticHarness = createSemanticLayerHarness();
 
   return {
     createRenderer(options): SceneRenderer {
@@ -87,6 +125,8 @@ function createHarnessFactory(): {
     },
     harnesses,
     options: rendererOptions,
+    semanticHarness,
+    semanticLayerFactory: vi.fn(() => semanticHarness.layer),
   };
 }
 
@@ -98,11 +138,13 @@ describe("createViewerController", () => {
     const container = {} as HTMLElement;
     const controller = createViewerControllerWithRenderer(
       {
+        accessibility: ACCESSIBILITY,
         container,
         resolveAsset,
         visualization: FIRST_VISUALIZATION,
       },
       factory.createRenderer,
+      factory.semanticLayerFactory,
     );
 
     controller.subscribe(listener);
@@ -122,6 +164,10 @@ describe("createViewerController", () => {
       resolveAsset,
       visualization: FIRST_VISUALIZATION,
     });
+    expect(factory.semanticHarness.rendererSnapshots).toEqual([
+      { diagnostics: [], status: "loading" },
+      { diagnostics: [], status: "ready" },
+    ]);
   });
 
   it("replaces the renderer while preserving the selected motion profile", () => {
@@ -129,11 +175,13 @@ describe("createViewerController", () => {
     const listener = vi.fn();
     const controller = createViewerControllerWithRenderer(
       {
+        accessibility: ACCESSIBILITY,
         container: {} as HTMLElement,
         resolveAsset: vi.fn(),
         visualization: FIRST_VISUALIZATION,
       },
       factory.createRenderer,
+      factory.semanticLayerFactory,
     );
 
     controller.subscribe(listener);
@@ -150,6 +198,10 @@ describe("createViewerController", () => {
     });
     expect(controller.getSnapshot().visualization).toBe(SECOND_VISUALIZATION);
     expect(listener).toHaveBeenCalledOnce();
+    expect(factory.semanticHarness.semanticGraphs).toHaveLength(1);
+    expect(factory.semanticHarness.semanticGraphs[0]).toMatchObject({
+      label: "Test architecture",
+    });
   });
 
   it("forwards camera controls and becomes inert after disposal", () => {
@@ -157,12 +209,14 @@ describe("createViewerController", () => {
     const listener = vi.fn();
     const controller = createViewerControllerWithRenderer(
       {
+        accessibility: ACCESSIBILITY,
         cameraMotion: "responsive",
         container: {} as HTMLElement,
         resolveAsset: vi.fn(),
         visualization: FIRST_VISUALIZATION,
       },
       factory.createRenderer,
+      factory.semanticLayerFactory,
     );
     const renderer = factory.harnesses[0]?.renderer;
 
@@ -178,6 +232,7 @@ describe("createViewerController", () => {
       transition: "immediate",
     });
     expect(renderer?.dispose).toHaveBeenCalledOnce();
+    expect(factory.semanticHarness.layer.dispose).toHaveBeenCalledOnce();
     expect(factory.harnesses).toHaveLength(1);
     expect(listener).not.toHaveBeenCalled();
   });

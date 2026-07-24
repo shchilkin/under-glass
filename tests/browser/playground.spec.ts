@@ -67,7 +67,7 @@ test("renders the default architecture through the public renderer boundary", as
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "PopChoice architecture" }),
+    page.getByRole("heading", { level: 1, name: "PopChoice architecture" }),
   ).toBeVisible();
   await expect(
     page.getByText("loading → ready", { exact: true }),
@@ -187,6 +187,18 @@ test("reports a stable failed lifecycle when WebGL2 is unavailable", async ({
   await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
     0,
   );
+  await expect(
+    page.locator("[data-under-glass-renderer-fallback]"),
+  ).toBeVisible();
+  await expect(page.locator("[data-under-glass-semantic-summary]")).toHaveCount(
+    1,
+  );
+  await expect(page.locator("[data-under-glass-semantic-node]")).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
+  );
+  await expect(
+    page.locator("[data-under-glass-semantic-connection]"),
+  ).toHaveCount(7);
 });
 
 test("renders basic Connections instead of failing the scene", async ({
@@ -235,6 +247,25 @@ test("renders the focused PopChoice views and both camera modes", async ({
   await expect(
     page.locator('[data-under-glass-label="connection"]').first(),
   ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(page.locator("[data-under-glass-labels]")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
+  await expect(page.locator("[data-under-glass-semantic-summary]")).toHaveCount(
+    1,
+  );
+  await expect(page.locator("[data-under-glass-semantic-node]")).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
+  );
+  await expect(page.locator("[data-under-glass-semantic-group]")).toHaveCount(
+    3,
+  );
+  await expect(
+    page.locator("[data-under-glass-semantic-connection]"),
+  ).toHaveCount(7);
+  await expect(
+    page.locator('[data-under-glass-semantic-node="web"]'),
+  ).toHaveText("Web application");
   await expect(
     page.locator('[data-under-glass-label="node"]', { hasText: "PopChoice" }),
   ).toHaveCount(0);
@@ -265,6 +296,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
   );
   const canvas = page.locator("canvas[data-under-glass-renderer]");
   const isometricPixels = await canvas.screenshot();
+  const isometricSemantics = await page
+    .locator("[data-under-glass-semantic-summary]")
+    .textContent();
 
   await top.click();
 
@@ -280,6 +314,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
   const topPixels = await canvas.screenshot();
 
   expect(topPixels.equals(isometricPixels)).toBe(false);
+  expect(
+    await page.locator("[data-under-glass-semantic-summary]").textContent(),
+  ).toBe(isometricSemantics);
 
   await operations.click();
 
@@ -305,6 +342,21 @@ test("renders the focused PopChoice views and both camera modes", async ({
   await expect(
     page.locator('[data-under-glass-label="connection"]').first(),
   ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(page.locator("[data-under-glass-semantic-summary]")).toHaveCount(
+    1,
+  );
+  await expect(page.locator("[data-under-glass-semantic-node]")).toHaveCount(
+    11,
+  );
+  await expect(page.locator("[data-under-glass-semantic-group]")).toHaveCount(
+    5,
+  );
+  await expect(
+    page.locator("[data-under-glass-semantic-connection]"),
+  ).toHaveCount(10);
+  await expect(
+    page.locator('[data-under-glass-semantic-node="browser"]'),
+  ).toHaveCount(0);
   await expect
     .poll(() => new URL(page.url()).searchParams.get("view"))
     .toBe("operations");

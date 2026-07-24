@@ -5,6 +5,12 @@ export {
   type ViewerSnapshot,
 } from "./viewer-controller.js";
 
+export type {
+  AccessibleEntityKind,
+  AccessibleEntityReference,
+  ViewerAccessibility,
+} from "./semantic-graph.js";
+
 export {
   type AssetResolver,
   type CameraMotion,

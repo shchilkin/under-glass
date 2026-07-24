@@ -10,6 +10,15 @@ import {
   type SetCameraModeOptions,
 } from "@under-glass/three";
 
+import {
+  createViewerSemanticGraph,
+  type ViewerAccessibility,
+} from "./semantic-graph.js";
+import {
+  createViewerSemanticLayer,
+  type ViewerSemanticLayerFactory,
+} from "./semantic-layer.js";
+
 export interface ViewerSnapshot {
   readonly diagnostics: readonly SceneRendererDiagnostic[];
   readonly status: SceneRendererStatus;
@@ -17,6 +26,7 @@ export interface ViewerSnapshot {
 }
 
 export interface CreateViewerControllerOptions {
+  readonly accessibility: ViewerAccessibility;
   readonly cameraMotion?: CameraMotion;
   readonly container: HTMLElement;
   readonly resolveAsset: AssetResolver;
@@ -58,6 +68,7 @@ function createRendererOptions(
 export function createViewerControllerWithRenderer(
   options: CreateViewerControllerOptions,
   createRenderer: SceneRendererFactory,
+  createSemanticLayer: ViewerSemanticLayerFactory = createViewerSemanticLayer,
 ): ViewerController {
   let active = true;
   let cameraMotion = options.cameraMotion;
@@ -65,11 +76,21 @@ export function createViewerControllerWithRenderer(
   let renderer = createRenderer(
     createRendererOptions(options, visualization, cameraMotion),
   );
+  const semanticLayer = createSemanticLayer(
+    options.container,
+    createViewerSemanticGraph(visualization, options.accessibility),
+  );
   let rendererUnsubscribe: () => void = () => {};
-  let snapshot: ViewerSnapshot = {
-    ...renderer.getSnapshot(),
-    visualization,
+  const synchronizeRendererSnapshot = (): ViewerSnapshot => {
+    const rendererSnapshot = renderer.getSnapshot();
+
+    semanticLayer.setRendererSnapshot(rendererSnapshot);
+    return {
+      ...rendererSnapshot,
+      visualization,
+    };
   };
+  let snapshot = synchronizeRendererSnapshot();
   const listeners = new Set<() => void>();
 
   const publishRendererSnapshot = (): void => {
@@ -77,10 +98,7 @@ export function createViewerControllerWithRenderer(
       return;
     }
 
-    snapshot = {
-      ...renderer.getSnapshot(),
-      visualization,
-    };
+    snapshot = synchronizeRendererSnapshot();
 
     for (const listener of [...listeners]) {
       listener();
@@ -102,6 +120,7 @@ export function createViewerControllerWithRenderer(
       active = false;
       rendererUnsubscribe();
       renderer.dispose();
+      semanticLayer.dispose();
       listeners.clear();
     },
     getSnapshot(): ViewerSnapshot {
@@ -128,13 +147,13 @@ export function createViewerControllerWithRenderer(
       rendererUnsubscribe();
       renderer.dispose();
       visualization = nextVisualization;
+      semanticLayer.setGraph(
+        createViewerSemanticGraph(visualization, options.accessibility),
+      );
       renderer = createRenderer(
         createRendererOptions(options, visualization, cameraMotion),
       );
-      snapshot = {
-        ...renderer.getSnapshot(),
-        visualization,
-      };
+      snapshot = synchronizeRendererSnapshot();
       subscribeToRenderer();
 
       for (const listener of [...listeners]) {
@@ -157,5 +176,9 @@ export function createViewerControllerWithRenderer(
 export function createViewerController(
   options: CreateViewerControllerOptions,
 ): ViewerController {
-  return createViewerControllerWithRenderer(options, createSceneRenderer);
+  return createViewerControllerWithRenderer(
+    options,
+    createSceneRenderer,
+    createViewerSemanticLayer,
+  );
 }

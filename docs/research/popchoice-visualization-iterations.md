@@ -209,7 +209,8 @@ What remains for an Editor:
 - Both views derive from shared host-side templates and retain stable semantic IDs.
 - Layout, grouping, visible labels, and Opening View belong to a preset view.
 - Group names, Node names, and Connection captions use world-space typography.
-- The HTML overlay is semantic-only for all label types.
+- The renderer-owned projected-label overlay is hidden from assistive
+  technology; `@under-glass/web` owns a separate synchronized semantic summary.
 - The Viewer may hide lower-priority visual labels for the current camera pose, but never mutates authored geometry.
 - Editor-authored layout and Viewer-side decluttering are separate responsibilities.
 - The public API continues to accept one concrete `Visualization`.
@@ -236,3 +237,30 @@ What remains for an Editor:
 - Projection tests cover shared IDs, view contents, group containment, visible endpoints, and deterministic orthogonal routes.
 - Browser coverage checks both preset views, both camera modes, URL state, lifecycle reset, label counts, and asset deduplication.
 - Manual browser review was performed for Recommendation and Operations in isometric and top cameras at the desktop playground size.
+
+### 10. Separate visual labels from host-owned accessible copy
+
+What worked:
+
+- One host resolver supplies context-rich labels from stable `{ kind, id }`
+  references for both Recommendation and Operations.
+- Group membership creates a compact hierarchy while every Connection retains
+  source, target, and direction.
+- The same semantic order survives camera transitions, and switching preset
+  views replaces the summary without stale or duplicate entities.
+- A visible WebGL2-unavailable fallback coexists with the complete semantic
+  summary.
+
+What did not work:
+
+- Treating projected label DOM as both visual typography and accessibility
+  duplicated terse presentation copy and exposed labels hidden for
+  decluttering.
+- Deriving accessible copy from persisted `label` fields coupled domain
+  semantics to camera-oriented presentation.
+
+Decision:
+
+- The projected label layer is `aria-hidden`.
+- `@under-glass/web` owns the semantic mirror and fallback lifecycle.
+- Accessible copy remains host-owned and does not expand Visualization v1.

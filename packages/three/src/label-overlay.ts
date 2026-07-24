@@ -67,7 +67,7 @@ function createOverlayLayer(container: HTMLElement): HTMLDivElement {
   }
 
   layer.dataset.underGlassLabels = "";
-  layer.setAttribute("aria-label", "Visualization labels");
+  layer.setAttribute("aria-hidden", "true");
   layer.style.position = "absolute";
   layer.style.inset = "0";
   layer.style.overflow = "hidden";

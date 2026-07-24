@@ -8,13 +8,14 @@ import {
   type Visualization,
 } from "@under-glass/core";
 import {
-  createSceneRenderer,
+  createViewerController,
   type CameraMotion,
   type ResolvedAsset,
-  type SceneRenderer,
-  type SceneRendererSnapshot,
   type SceneRendererStatus,
-} from "@under-glass/three";
+  type ViewerAccessibility,
+  type ViewerController,
+  type ViewerSnapshot,
+} from "@under-glass/web";
 import {
   markDemoGlbAsCompressed,
   resolveDemoAsset,
@@ -268,9 +269,68 @@ function createDemoVisualization(): Visualization {
 
 const fallbackVisualization = createDemoVisualization();
 
-const loadingSnapshot: SceneRendererSnapshot = {
-  diagnostics: [],
-  status: "loading",
+function loadingSnapshot(visualization: Visualization): ViewerSnapshot {
+  return {
+    diagnostics: [],
+    status: "loading",
+    visualization,
+  };
+}
+
+function humanizeId(id: string): string {
+  return id
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+const ACCESSIBLE_LABELS: Readonly<Record<string, string>> = {
+  "connection:backoffice-postgres": "Backoffice project data access",
+  "connection:backoffice-redis": "Backoffice queue access",
+  "connection:backoffice-telemetry": "Backoffice telemetry",
+  "connection:browser-web": "HTTPS request",
+  "connection:bull-board-redis": "Queue inspection",
+  "connection:movie-discovery-openai": "Embedding generation",
+  "connection:movie-discovery-postgres": "Catalog persistence",
+  "connection:movie-discovery-tmdb": "Movie metadata lookup",
+  "connection:redis-workers": "Background jobs",
+  "connection:supported-connection": "Request",
+  "connection:telemetry-grafana": "Observable signals",
+  "connection:web-postgres": "Recommendation query and results",
+  "connection:web-redis": "Job enqueue",
+  "connection:web-telemetry": "Web telemetry",
+  "connection:workers-openai": "AI inference",
+  "connection:workers-postgres": "Recommendation persistence",
+  "connection:workers-telemetry": "Worker telemetry",
+  "connection:workers-tmdb": "Movie metadata",
+  "group:operations-external": "External providers",
+  "group:operations-observability": "Observability",
+  "group:operations-platform": "Platform data",
+  "group:operations-signals": "Runtime signals",
+  "group:operations-tools": "Operations tools",
+  "group:recommendation-data": "Recommendation data",
+  "group:recommendation-providers": "AI and content providers",
+  "group:recommendation-runtime": "Recommendation runtime",
+  "node:backoffice": "Backoffice",
+  "node:browser": "Web browser",
+  "node:bull-board": "Bull Board queue dashboard",
+  "node:grafana": "Grafana",
+  "node:movie-discovery": "Movie discovery service",
+  "node:openai-api": "OpenAI API",
+  "node:postgres": "PostgreSQL with pgvector",
+  "node:redis": "Redis with BullMQ",
+  "node:telemetry-stack": "Telemetry stack",
+  "node:tmdb-api": "TMDB API",
+  "node:web": "Web application",
+  "node:workers": "Background workers",
+};
+
+const VIEWER_ACCESSIBILITY: ViewerAccessibility = {
+  resolveEntityLabel: ({ id, kind }) =>
+    ACCESSIBLE_LABELS[`${kind}:${id}`] ?? `${kind} ${humanizeId(id)}`,
+  sceneLabel: showPopChoiceVisualization
+    ? "PopChoice architecture"
+    : "Under Glass demonstration architecture",
 };
 
 function appendStatus(
@@ -456,7 +516,7 @@ function sceneMetricSubject(
 }
 
 interface RendererDiagnosticsProps {
-  readonly diagnostics: SceneRendererSnapshot["diagnostics"];
+  readonly diagnostics: ViewerSnapshot["diagnostics"];
 }
 
 function RendererDiagnostics({ diagnostics }: RendererDiagnosticsProps) {
@@ -479,15 +539,16 @@ function RendererDiagnostics({ diagnostics }: RendererDiagnosticsProps) {
 
 function App() {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<SceneRenderer | null>(null);
-  const [snapshot, setSnapshot] =
-    useState<SceneRendererSnapshot>(loadingSnapshot);
+  const controllerRef = useRef<ViewerController | null>(null);
   const [popChoiceViewId, setPopChoiceViewId] =
     useState<PopChoiceViewId>(initialPopChoiceView);
   const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
   const visualization = showPopChoiceVisualization
     ? activePopChoiceView.visualization
     : fallbackVisualization;
+  const [snapshot, setSnapshot] = useState<ViewerSnapshot>(() =>
+    loadingSnapshot(visualization),
+  );
   const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
     visualization.openingView.cameraMode,
   );
@@ -503,11 +564,12 @@ function App() {
       return;
     }
 
-    setSnapshot(loadingSnapshot);
+    setSnapshot(loadingSnapshot(visualization));
     setStatusHistory([]);
     setAssetResolveCount(0);
 
-    const renderer = createSceneRenderer({
+    const controller = createViewerController({
+      accessibility: VIEWER_ACCESSIBILITY,
       cameraMotion,
       container,
       resolveAsset: async (assetId) => {
@@ -516,29 +578,45 @@ function App() {
       },
       visualization,
     });
-    rendererRef.current = renderer;
+    controllerRef.current = controller;
     const updateSnapshot = () => {
-      const nextSnapshot = renderer.getSnapshot();
+      const nextSnapshot = controller.getSnapshot();
       setSnapshot(nextSnapshot);
       setStatusHistory((history) => appendStatus(history, nextSnapshot.status));
     };
-    const unsubscribe = renderer.subscribe(updateSnapshot);
+    const unsubscribe = controller.subscribe(updateSnapshot);
 
     updateSnapshot();
 
     return () => {
-      rendererRef.current = null;
+      controllerRef.current = null;
       unsubscribe();
-      renderer.dispose();
+      controller.dispose();
     };
+  }, []);
+
+  useEffect(() => {
+    const controller = controllerRef.current;
+
+    if (
+      controller === null ||
+      controller.getSnapshot().visualization === visualization
+    ) {
+      return;
+    }
+
+    setSnapshot(loadingSnapshot(visualization));
+    setStatusHistory([]);
+    setAssetResolveCount(0);
+    controller.setVisualization(visualization);
   }, [visualization]);
 
   useEffect(() => {
-    rendererRef.current?.setCameraMode(cameraMode);
+    controllerRef.current?.setCameraMode(cameraMode);
   }, [cameraMode]);
 
   useEffect(() => {
-    rendererRef.current?.setCameraMotion(cameraMotion);
+    controllerRef.current?.setCameraMotion(cameraMotion);
   }, [cameraMotion]);
 
   const selectCameraMotion = (motion: CameraMotion): void => {
