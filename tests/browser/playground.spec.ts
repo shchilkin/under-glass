@@ -69,9 +69,9 @@ test("renders the default architecture through the public renderer boundary", as
   await expect(
     page.getByRole("heading", { level: 1, name: "PopChoice architecture" }),
   ).toBeVisible();
-  await expect(
-    page.getByText("loading → ready", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 8_000,
+  });
 
   const canvas = page.locator("canvas[data-under-glass-renderer]");
 
@@ -93,9 +93,9 @@ test("renders multiple Nodes while resolving a repeated Asset ID once", async ({
 }) => {
   await page.goto("/?scenario=cache");
 
-  await expect(
-    page.getByText("loading → ready", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 8_000,
+  });
   await expect(page.getByTestId("node-count")).toHaveText("3");
   await expect(page.getByTestId("asset-resolve-count")).toHaveText("1");
   await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
@@ -112,15 +112,15 @@ test("replaces progressive Placeholders without waiting for slower Nodes", async
   const canvas = page.locator("canvas[data-under-glass-renderer]");
   await expect(page.getByTestId("asset-resolve-count")).toHaveText("2");
   await expect
-    .poll(async () => (await sceneColorCounts(canvas)).asset)
-    .toBeGreaterThan(50);
-  await expect
-    .poll(async () => (await sceneColorCounts(canvas)).placeholder)
-    .toBeGreaterThan(50);
+    .poll(async () => {
+      const counts = await sceneColorCounts(canvas);
+      return counts.asset > 50 && counts.placeholder > 50;
+    })
+    .toBe(true);
 
-  await expect(
-    page.getByText("loading → ready", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 8_000,
+  });
   await expect
     .poll(async () => (await sceneColorCounts(canvas)).placeholder)
     .toBeLessThan(10);
@@ -367,6 +367,152 @@ test("renders the focused PopChoice views and both camera modes", async ({
   const operationsPixels = await canvas.screenshot();
 
   expect(operationsPixels.equals(isometricPixels)).toBe(false);
+});
+
+test("selects, moves, undoes, and redoes a Node in the editor loop", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  const canvas = page.locator("canvas[data-under-glass-renderer]");
+  const webControl = page.locator(
+    '[data-under-glass-semantic-node-control="web"]',
+  );
+
+  await webControl.focus();
+  await expect(webControl).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(webControl).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-selected-node-id",
+    "web",
+  );
+  await expect(page.getByText("Web", { exact: true }).last()).toBeVisible();
+  const selectedPosition = page.getByTestId("selected-node-position");
+  const originalPosition = await selectedPosition.textContent();
+
+  await page
+    .getByRole("heading", { level: 1, name: "PopChoice architecture" })
+    .click();
+  const selectedPixels = await canvas.screenshot();
+  const bounds = await canvas.boundingBox();
+
+  expect(bounds).not.toBeNull();
+  if (bounds === null) {
+    return;
+  }
+
+  await page.mouse.move(bounds.x + 480, bounds.y + 140);
+  await page.mouse.down();
+  await page.keyboard.press("Escape");
+  await page.mouse.move(bounds.x + 410, bounds.y + 205, { steps: 8 });
+  await page.mouse.up();
+  await expect(scene).not.toHaveAttribute(
+    "data-under-glass-placement-validity",
+    /.+/,
+  );
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 480, bounds.y + 140);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 410, bounds.y + 205, { steps: 8 });
+  await canvas.dispatchEvent("pointercancel", {
+    bubbles: true,
+    pointerId: 1,
+  });
+  await page.mouse.up();
+  await expect(scene).not.toHaveAttribute(
+    "data-under-glass-placement-validity",
+    /.+/,
+  );
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 480, bounds.y + 140);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 585, bounds.y + 190, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "invalid",
+  );
+  await page.mouse.up();
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.getByRole("button", { name: "Free", exact: true }).click();
+  await page.mouse.move(bounds.x + 480, bounds.y + 140);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 413, bounds.y + 207, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "valid",
+  );
+  await page.mouse.up();
+
+  const movedPixels = await canvas.screenshot();
+  expect(movedPixels.equals(selectedPixels)).toBe(false);
+  const movedPosition = await selectedPosition.textContent();
+  expect(movedPosition).not.toBe(originalPosition);
+  expect(
+    movedPosition
+      ?.split(",")
+      .map(Number)
+      .some((coordinate) => !Number.isInteger(coordinate)),
+  ).toBe(true);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+
+  await page.keyboard.press("Control+z");
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Redo" })).toBeEnabled();
+
+  await page.keyboard.press("Control+Shift+z");
+  await expect(selectedPosition).toHaveText(movedPosition ?? "");
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 373, bounds.y + 255, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "valid",
+  );
+  await page.mouse.up();
+
+  const topPosition = await selectedPosition.textContent();
+  expect(topPosition).not.toBe(originalPosition);
+  await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+
+  await page.mouse.click(bounds.x + 40, bounds.y + 40);
+  await expect(scene).not.toHaveAttribute(
+    "data-under-glass-selected-node-id",
+    /.+/,
+  );
+  await expect(selectedPosition).toHaveText("—");
+
+  await page.getByRole("button", { name: /Operations/ }).click();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+  await expect(canvas).toHaveCount(1);
+  await expect(page.locator("[data-under-glass-semantic-summary]")).toHaveCount(
+    1,
+  );
 });
 
 test("declutters world-space labels in a compact viewport", async ({

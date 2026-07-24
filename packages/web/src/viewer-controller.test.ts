@@ -58,9 +58,13 @@ function createRendererHarness(): RendererHarness {
     dispose: vi.fn(() => {
       listeners.clear();
     }),
+    getNodeFootprints: () => new Map(),
     getSnapshot: () => snapshot,
+    hitTestNode: vi.fn(() => null),
+    projectPointerToGround: vi.fn(() => null),
     setCameraMode: vi.fn(),
     setCameraMotion: vi.fn(),
+    setNodeInteraction: vi.fn(),
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
@@ -99,6 +103,7 @@ function createSemanticLayerHarness(): SemanticLayerHarness {
       setRendererSnapshot(snapshot): void {
         rendererSnapshots.push(snapshot);
       },
+      setSelectedNodeId: vi.fn(),
     },
     rendererSnapshots,
     semanticGraphs,
@@ -170,7 +175,7 @@ describe("createViewerController", () => {
     ]);
   });
 
-  it("replaces the renderer while preserving the selected motion profile", () => {
+  it("replaces the renderer while preserving camera presentation state", () => {
     const factory = createHarnessFactory();
     const listener = vi.fn();
     const controller = createViewerControllerWithRenderer(
@@ -186,7 +191,12 @@ describe("createViewerController", () => {
 
     controller.subscribe(listener);
     controller.setCameraMotion("spring");
-    controller.setVisualization(SECOND_VISUALIZATION);
+    controller.setCameraMode("top");
+    const updatedVisualization = {
+      ...FIRST_VISUALIZATION,
+      nodes: [],
+    } satisfies Visualization;
+    controller.setVisualization(updatedVisualization);
 
     expect(factory.harnesses[0]?.renderer.setCameraMotion).toHaveBeenCalledWith(
       "spring",
@@ -194,9 +204,13 @@ describe("createViewerController", () => {
     expect(factory.harnesses[0]?.renderer.dispose).toHaveBeenCalledOnce();
     expect(factory.options[1]).toMatchObject({
       cameraMotion: "spring",
-      visualization: SECOND_VISUALIZATION,
+      visualization: updatedVisualization,
     });
-    expect(controller.getSnapshot().visualization).toBe(SECOND_VISUALIZATION);
+    expect(factory.harnesses[1]?.renderer.setCameraMode).toHaveBeenCalledWith(
+      "top",
+      { transition: "immediate" },
+    );
+    expect(controller.getSnapshot().visualization).toBe(updatedVisualization);
     expect(listener).toHaveBeenCalledOnce();
     expect(factory.semanticHarness.semanticGraphs).toHaveLength(1);
     expect(factory.semanticHarness.semanticGraphs[0]).toMatchObject({

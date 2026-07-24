@@ -164,7 +164,7 @@ h1 {
 
 .app--graph .scene-stage {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: clamp(520px, calc(100vh - 190px), 780px);
   min-height: 0;
   margin: 0;
@@ -173,6 +173,102 @@ h1 {
 .app--graph .scene {
   height: 100%;
   border-radius: 14px;
+}
+
+.app--graph .scene canvas {
+  cursor: grab;
+  touch-action: none;
+}
+
+.app--graph .scene canvas:active {
+  cursor: grabbing;
+}
+
+.editor-controls {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 4px 0;
+}
+
+.editor-selection {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: #93a19a;
+  font-size: 0.72rem;
+}
+
+.editor-selection strong {
+  overflow: hidden;
+  color: #d9e5df;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-selection .placement-state {
+  color: #d5a88d;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-actions > button,
+.snap-options button {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgb(233 239 235 / 12%);
+  border-radius: 7px;
+  color: #95a39c;
+  background: #0b100e;
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.editor-actions > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.snap-options {
+  display: flex;
+  margin-right: 6px;
+}
+
+.snap-options button {
+  border-radius: 0;
+}
+
+.snap-options button:first-child {
+  border-radius: 7px 0 0 7px;
+}
+
+.snap-options button:last-child {
+  border-radius: 0 7px 7px 0;
+}
+
+.snap-options button[aria-pressed="true"] {
+  border-color: rgb(131 214 170 / 36%);
+  color: #b7eccf;
+  background: #17251f;
+}
+
+.editor-actions button:focus-visible,
+.snap-options button:focus-visible {
+  outline: 2px solid #e9efeb;
+  outline-offset: 2px;
 }
 
 .view-switch {
@@ -412,6 +508,15 @@ ul[aria-label="Renderer diagnostics"] code {
 
   .view-options {
     width: 100%;
+  }
+
+  .editor-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .editor-actions {
+    justify-content: space-between;
   }
 
   .app--graph dl {

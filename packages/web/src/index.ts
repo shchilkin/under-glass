@@ -5,6 +5,14 @@ export {
   type ViewerSnapshot,
 } from "./viewer-controller.js";
 
+export {
+  createEditorController,
+  type CreateEditorControllerOptions,
+  type EditorController,
+  type EditorOperationEvent,
+  type EditorSnapshot,
+} from "./editor-controller.js";
+
 export type {
   AccessibleEntityKind,
   AccessibleEntityReference,

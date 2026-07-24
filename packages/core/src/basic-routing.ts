@@ -1,3 +1,4 @@
+import { groundPointsEqual } from "./geometry.js";
 import type {
   Connection,
   GroundBounds,
@@ -92,15 +93,12 @@ function derivePortPair(source: GroundBounds, target: GroundBounds): PortPair {
   };
 }
 
-function samePoint(first: GroundPoint, second: GroundPoint): boolean {
-  return first.x === second.x && first.z === second.z;
-}
-
 function removeConsecutiveDuplicates(
   points: readonly GroundPoint[],
 ): GroundPoint[] {
   return points.filter(
-    (point, index) => index === 0 || !samePoint(point, points[index - 1]!),
+    (point, index) =>
+      index === 0 || !groundPointsEqual(point, points[index - 1]!),
   );
 }
 

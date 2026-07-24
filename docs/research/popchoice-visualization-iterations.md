@@ -215,7 +215,8 @@ What remains for an Editor:
 - Editor-authored layout and Viewer-side decluttering are separate responsibilities.
 - The public API continues to accept one concrete `Visualization`.
 - A public Source Graph or View abstraction remains deferred until more real projects validate the pattern.
-- Realtime collaboration, version history, free camera, and editor work remain outside this prototype.
+- Realtime collaboration, persisted version history, and free camera remain outside this prototype.
+- The first Editor slice is deliberately limited to selecting and moving existing Nodes with session-local undo/redo; creation, property editing, and automatic layout remain deferred.
 
 ## Deferred experiments
 
@@ -264,3 +265,51 @@ Decision:
 - The projected label layer is `aria-hidden`.
 - `@under-glass/web` owns the semantic mirror and fallback lifecycle.
 - Accessible copy remains host-owned and does not expand Visualization v1.
+
+### 11. Add the minimum Editor loop after the diagram proved its value
+
+What changed:
+
+- Added framework-neutral transient Selection without writing it into the
+  host-owned Visualization.
+- Pointer movement projects onto the same Ground Plane in Isometric and Top.
+- Grid snapping is configurable and may be disabled without changing the
+  continuous persisted coordinate model.
+- Asset Footprints reject overlaps before commit and give invalid previews a
+  deterministic scene treatment.
+- A valid drag emits one reversible Move Node Operation and one next
+  Visualization, rather than emitting every pointer movement.
+- Session-local bounded undo/redo supports controls and platform keyboard
+  shortcuts. A new Operation after undo clears redo.
+- The hidden semantic mirror exposes Node buttons for keyboard selection and
+  expands into a visible focus surface while those controls are used.
+
+What worked:
+
+- The renderer can preview one Node, its world-space label, and its basic
+  Connections together without persisting intermediate states.
+- Selection survives renderer replacement after a committed Operation.
+- The host remains the persisted source of truth: it receives completed
+  Operations and concrete Visualizations.
+- Recommendation now proves the full select → move → undo → redo loop in a
+  real project diagram rather than a toy editor fixture.
+
+What did not expand into this slice:
+
+- No create/delete Node flow, property inspector, Group editing, route-anchor
+  authoring, automatic layout, or free camera.
+- Invalid placement is collision-only; Group containment and authored layout
+  rules need separate domain decisions.
+- Replacing the renderer on every committed Visualization is acceptable for
+  this prototype but should be measured before treating it as the final
+  high-frequency editing architecture.
+
+Decision:
+
+- Keep selection, drag preview, and history transient inside an Editor
+  Controller.
+- Keep deterministic Operations and placement rules in `@under-glass/core`.
+- Keep hit testing, Ground Plane projection, and visual preview in
+  `@under-glass/three`.
+- Continue to expose host-owned concrete Visualization snapshots rather than
+  introduce a persistent editor document or collaboration backend.

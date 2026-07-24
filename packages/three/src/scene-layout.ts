@@ -152,6 +152,7 @@ export function createAssetPlaceholder(node: Node): Mesh {
   const placeholder = new Mesh(geometry, material);
 
   placeholder.name = `Asset Placeholder ${node.id}`;
+  placeholder.userData.nodeId = node.id;
   placeholder.position.set(
     bounds.centerX,
     PLACEHOLDER_HEIGHT / 2,
@@ -234,6 +235,7 @@ export function createPlacedAsset(
   const placement = new Group();
 
   placement.name = `Node ${node.id}`;
+  placement.userData.nodeId = node.id;
   placement.matrixAutoUpdate = false;
   placement.matrix.copy(createNodePlacementMatrix(node, definition));
   asset.traverse((object) => {
@@ -244,4 +246,13 @@ export function createPlacedAsset(
   });
   placement.add(asset);
   return placement;
+}
+
+export function updatePlacedAsset(
+  placement: Object3D,
+  node: Node,
+  definition: AssetDefinition,
+): void {
+  placement.matrix.copy(createNodePlacementMatrix(node, definition));
+  placement.matrixWorldNeedsUpdate = true;
 }
