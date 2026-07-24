@@ -12,6 +12,7 @@ import {
 
 interface ProjectedLabel {
   readonly element: HTMLDivElement;
+  readonly offset: LabelPoint;
   readonly points: readonly Vector3[];
   readonly type: "connection" | "group" | "node";
 }
@@ -33,15 +34,16 @@ function styleLabel(
   element.style.whiteSpace = "nowrap";
 
   if (type === "node") {
-    element.style.padding = "3px 6px";
-    element.style.border = "1px solid rgb(220 229 224 / 12%)";
-    element.style.borderRadius = "4px";
-    element.style.color = "#e5ebe7";
-    element.style.background = "rgb(8 12 11 / 86%)";
+    element.style.padding = "2px 4px";
+    element.style.color = "#f0f4f1";
+    element.style.background = "transparent";
     element.style.fontFamily =
       'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
-    element.style.fontSize = "11px";
-    element.style.fontWeight = "600";
+    element.style.fontSize = "12px";
+    element.style.fontWeight = "650";
+    element.style.lineHeight = "1.2";
+    element.style.textShadow =
+      "0 2px 4px rgb(0 0 0 / 95%), 0 5px 12px rgb(0 0 0 / 60%)";
   } else if (type === "group") {
     element.style.color = "#69776f";
     element.style.fontFamily =
@@ -53,11 +55,12 @@ function styleLabel(
   } else {
     element.style.padding = "2px 5px";
     element.style.borderRadius = "3px";
-    element.style.color = "#a5b2ac";
-    element.style.background = "rgb(8 12 11 / 72%)";
+    element.style.color = "#d0d9d4";
+    element.style.background = "rgb(8 12 11 / 90%)";
     element.style.fontFamily =
       '"SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace';
-    element.style.fontSize = "9px";
+    element.style.fontSize = "10px";
+    element.style.fontWeight = "600";
   }
 }
 
@@ -66,13 +69,14 @@ function createLabel(
   text: string,
   type: ProjectedLabel["type"],
   points: readonly Vector3[],
+  offset: LabelPoint = { x: 0, y: 0 },
 ): ProjectedLabel {
   const element = document.createElement("div");
   element.dataset.underGlassLabel = type;
   element.textContent = text;
   styleLabel(element, type);
   layer.append(element);
-  return { element, points, type };
+  return { element, offset, points, type };
 }
 
 function routeLabelPoint(route: BasicConnectionRoute): Vector3 {
@@ -106,9 +110,13 @@ function createVisualizationLabels(
   visualization: Visualization,
 ): ProjectedLabel[] {
   const nodeLabels = visualization.nodes.map((node) =>
-    createLabel(layer, node.label, "node", [
-      new Vector3(node.position.x, 0.15, node.position.z + 0.8),
-    ]),
+    createLabel(
+      layer,
+      node.label,
+      "node",
+      [new Vector3(node.position.x, 0.02, node.position.z)],
+      { x: 0, y: 18 },
+    ),
   );
   const groupLabels = visualization.groups.map((group) =>
     createLabel(layer, group.label ?? group.id, "group", [
@@ -170,8 +178,8 @@ function projectLabel(
           return candidateY < bestY ? candidate : best;
         })
       : projectedCandidates[0]!;
-  const x = (projected.x * 0.5 + 0.5) * width;
-  const y = (-projected.y * 0.5 + 0.5) * height;
+  const x = (projected.x * 0.5 + 0.5) * width + label.offset.x;
+  const y = (-projected.y * 0.5 + 0.5) * height + label.offset.y;
 
   return {
     hidden: isLabelOutsideViewport(projected, x, y, width, height),
