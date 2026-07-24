@@ -17,8 +17,8 @@ export interface LabelSize {
 
 const LABEL_GAP = 4;
 const EDGE_INSET = 4;
-const VERTICAL_STEP = 28;
-const HORIZONTAL_STEP = 52;
+const VERTICAL_STEP = 22;
+const HORIZONTAL_STEP = 40;
 
 export function labelRectangle(
   center: LabelPoint,
@@ -59,7 +59,7 @@ function isInsideViewport(
 function candidateOffsets(): LabelPoint[] {
   const offsets: LabelPoint[] = [{ x: 0, y: 0 }];
 
-  for (let ring = 1; ring <= 4; ring += 1) {
+  for (let ring = 1; ring <= 2; ring += 1) {
     const x = HORIZONTAL_STEP * ring;
     const y = VERTICAL_STEP * ring;
 

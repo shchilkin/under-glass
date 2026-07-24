@@ -31,28 +31,33 @@ function styleLabel(
   element.style.left = "0";
   element.style.pointerEvents = "none";
   element.style.whiteSpace = "nowrap";
-  element.style.fontFamily =
-    '"SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace';
 
   if (type === "node") {
-    element.style.padding = "4px 7px";
-    element.style.border = "1px solid rgb(220 229 224 / 18%)";
-    element.style.borderRadius = "5px";
-    element.style.color = "#f0f4f2";
-    element.style.background = "rgb(9 13 12 / 92%)";
-    element.style.fontSize = "12px";
+    element.style.padding = "3px 6px";
+    element.style.border = "1px solid rgb(220 229 224 / 12%)";
+    element.style.borderRadius = "4px";
+    element.style.color = "#e5ebe7";
+    element.style.background = "rgb(8 12 11 / 86%)";
+    element.style.fontFamily =
+      'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+    element.style.fontSize = "11px";
+    element.style.fontWeight = "600";
   } else if (type === "group") {
-    element.style.color = "#78877f";
-    element.style.fontSize = "12px";
+    element.style.color = "#69776f";
+    element.style.fontFamily =
+      'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
+    element.style.fontSize = "11px";
     element.style.fontWeight = "700";
-    element.style.letterSpacing = "0.16em";
+    element.style.letterSpacing = "0.14em";
     element.style.textTransform = "uppercase";
   } else {
-    element.style.padding = "3px 6px";
-    element.style.borderRadius = "4px";
-    element.style.color = "#aebbb5";
-    element.style.background = "rgb(9 13 12 / 82%)";
-    element.style.fontSize = "10px";
+    element.style.padding = "2px 5px";
+    element.style.borderRadius = "3px";
+    element.style.color = "#a5b2ac";
+    element.style.background = "rgb(8 12 11 / 72%)";
+    element.style.fontFamily =
+      '"SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace';
+    element.style.fontSize = "9px";
   }
 }
 
@@ -272,7 +277,11 @@ function createRouteLabels(
   routes: readonly BasicConnectionRoute[],
 ): ProjectedLabel[] {
   return routes
-    .filter((route) => route.label.length > 0)
+    .filter(
+      (route) =>
+        route.label.length > 0 &&
+        (route.styleKey === undefined || route.styleKey === "primary"),
+    )
     .map((route) =>
       createLabel(layer, route.label, "connection", [routeLabelPoint(route)]),
     );

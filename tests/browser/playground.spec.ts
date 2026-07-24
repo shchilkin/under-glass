@@ -225,7 +225,7 @@ test("renders the canonical PopChoice Visualization in both camera modes", async
   await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(2);
   await expect(
     page.locator('[data-under-glass-label="connection"]'),
-  ).toHaveCount(17);
+  ).toHaveCount(5);
   await expect(
     page.locator('[data-under-glass-label="node"]', { hasText: "PopChoice" }),
   ).toHaveCount(0);

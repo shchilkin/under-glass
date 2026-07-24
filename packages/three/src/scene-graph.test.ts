@@ -1,5 +1,6 @@
 import {
   BufferAttribute,
+  CylinderGeometry,
   LineBasicMaterial,
   LineLoop,
   LineSegments,
@@ -129,6 +130,42 @@ describe("project graph presentation", () => {
 
     expect((segment.material as MeshStandardMaterial).color.getHex()).toBe(
       DEFAULT_SCENE_THEME.connection,
+    );
+    expect((segment.material as MeshStandardMaterial).roughness).toBe(0.4);
+  });
+
+  it("distinguishes primary, supporting, and telemetry routes", () => {
+    const primary = meshNamed(
+      createConnectionRoute({ ...route, styleKey: "primary" }),
+      "Route Segment",
+    );
+    const supporting = meshNamed(
+      createConnectionRoute({ ...route, styleKey: "supporting" }),
+      "Route Segment",
+    );
+    const telemetry = meshNamed(
+      createConnectionRoute({ ...route, styleKey: "telemetry" }),
+      "Route Segment",
+    );
+
+    expect((primary.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.connection,
+    );
+    expect((supporting.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.supportingConnection,
+    );
+    expect((telemetry.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.secondaryConnection,
+    );
+    expect(
+      (primary.geometry as CylinderGeometry).parameters.radiusTop,
+    ).toBeGreaterThan(
+      (supporting.geometry as CylinderGeometry).parameters.radiusTop,
+    );
+    expect(
+      (primary.geometry as CylinderGeometry).parameters.radiusTop,
+    ).toBeGreaterThan(
+      (telemetry.geometry as CylinderGeometry).parameters.radiusTop,
     );
   });
 });

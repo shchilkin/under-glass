@@ -21,10 +21,10 @@ const EXPECTED_NODE_IDS = [
 
 const EXPECTED_CONNECTIONS = [
   ["browser", "web", "HTTPS", "oneWay"],
-  ["web", "redis", "Enqueue work", "oneWay"],
-  ["redis", "workers", "BullMQ jobs", "oneWay"],
-  ["workers", "postgres", "Persist results", "oneWay"],
-  ["web", "postgres", "SQL + pgvector", "bidirectional"],
+  ["web", "redis", "Enqueue", "oneWay"],
+  ["redis", "workers", "Jobs", "oneWay"],
+  ["workers", "postgres", "Persist", "oneWay"],
+  ["web", "postgres", "Query · results", "bidirectional"],
   ["workers", "openai-api", "OpenAI inference", "oneWay"],
   ["workers", "tmdb-api", "TMDB metadata", "oneWay"],
   ["backoffice", "postgres", "Admin data", "bidirectional"],
@@ -110,6 +110,22 @@ describe("canonical PopChoice Visualization", () => {
       "backoffice-telemetry",
       "telemetry-grafana",
     ]);
+    expect(
+      POPCHOICE_VISUALIZATION.connections
+        .filter((connection) => connection.styleKey === "primary")
+        .map((connection) => connection.id),
+    ).toEqual([
+      "browser-web",
+      "web-redis",
+      "redis-workers",
+      "workers-postgres",
+      "web-postgres",
+    ]);
+    expect(
+      POPCHOICE_VISUALIZATION.connections
+        .filter((connection) => connection.styleKey === "supporting")
+        .map((connection) => connection.id),
+    ).toHaveLength(8);
   });
 
   it("opens on the whole system in an isometric view", () => {

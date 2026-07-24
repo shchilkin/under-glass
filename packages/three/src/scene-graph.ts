@@ -27,13 +27,54 @@ export const DEFAULT_SCENE_THEME = {
   gridMinor: 0x8aa096,
   groupBorder: 0x4c6b5e,
   groupSurface: 0x16211d,
-  secondaryConnection: 0xe87a64,
+  secondaryConnection: 0xc9816c,
+  supportingConnection: 0x52675e,
 };
 
-function routeColor(route: BasicConnectionRoute): number {
-  return route.styleKey === "telemetry"
-    ? DEFAULT_SCENE_THEME.secondaryConnection
-    : DEFAULT_SCENE_THEME.connection;
+interface RouteTreatment {
+  readonly arrowHeight: number;
+  readonly arrowRadius: number;
+  readonly color: number;
+  readonly emissiveIntensity: number;
+  readonly metalness: number;
+  readonly radius: number;
+  readonly roughness: number;
+}
+
+function routeTreatment(route: BasicConnectionRoute): RouteTreatment {
+  if (route.styleKey === "supporting") {
+    return {
+      arrowHeight: 0.24,
+      arrowRadius: 0.095,
+      color: DEFAULT_SCENE_THEME.supportingConnection,
+      emissiveIntensity: 0.04,
+      metalness: 0.1,
+      radius: 0.03,
+      roughness: 0.65,
+    };
+  }
+
+  if (route.styleKey === "telemetry") {
+    return {
+      arrowHeight: 0.26,
+      arrowRadius: 0.105,
+      color: DEFAULT_SCENE_THEME.secondaryConnection,
+      emissiveIntensity: 0.08,
+      metalness: 0.1,
+      radius: 0.034,
+      roughness: 0.65,
+    };
+  }
+
+  return {
+    arrowHeight: 0.32,
+    arrowRadius: 0.14,
+    color: DEFAULT_SCENE_THEME.connection,
+    emissiveIntensity: 0.28,
+    metalness: 0.25,
+    radius: 0.052,
+    roughness: 0.4,
+  };
 }
 
 function addMesh(
@@ -100,8 +141,8 @@ export function updateInfiniteGrid(
   };
 
   root.userData.viewportGroundBounds = bounds;
-  root.add(createLines(1, DEFAULT_SCENE_THEME.gridMinor, 0.15));
-  root.add(createLines(4, DEFAULT_SCENE_THEME.gridMajor, 0.26));
+  root.add(createLines(1, DEFAULT_SCENE_THEME.gridMinor, 0.055));
+  root.add(createLines(4, DEFAULT_SCENE_THEME.gridMajor, 0.13));
 }
 
 export function createGroupSurface(group: Group): ThreeGroup {
@@ -117,7 +158,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
       color: DEFAULT_SCENE_THEME.groupSurface,
       depthWrite: false,
       metalness: 0,
-      opacity: 0.72,
+      opacity: 0.46,
       roughness: 1,
       transparent: true,
     }),
@@ -137,7 +178,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
     new BufferGeometry().setFromPoints(borderPoints),
     new LineBasicMaterial({
       color: DEFAULT_SCENE_THEME.groupBorder,
-      opacity: 0.9,
+      opacity: 0.56,
       transparent: true,
     }),
   );
@@ -154,18 +195,21 @@ function createRouteArrow(
   direction: Vector3,
   material: MeshStandardMaterial,
   name: string,
+  radius: number,
+  height: number,
 ): void {
-  const arrow = addMesh(parent, new ConeGeometry(0.14, 0.32, 16), material, [
-    point.x,
-    point.y,
-    point.z,
-  ]);
+  const arrow = addMesh(
+    parent,
+    new ConeGeometry(radius, height, 16),
+    material,
+    [point.x, point.y, point.z],
+  );
   arrow.name = name;
   arrow.quaternion.setFromUnitVectors(
     new Vector3(0, 1, 0),
     direction.normalize(),
   );
-  arrow.position.addScaledVector(direction, -0.06);
+  arrow.position.addScaledVector(direction, -height * 0.1875);
 }
 
 export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
@@ -173,13 +217,13 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
   const points = route.points.map(
     (point) => new Vector3(point.x, 0.16, point.z),
   );
-  const color = routeColor(route);
+  const treatment = routeTreatment(route);
   const material = new MeshStandardMaterial({
-    color,
-    emissive: color,
-    emissiveIntensity: 0.28,
-    metalness: 0.25,
-    roughness: 0.4,
+    color: treatment.color,
+    emissive: treatment.color,
+    emissiveIntensity: treatment.emissiveIntensity,
+    metalness: treatment.metalness,
+    roughness: treatment.roughness,
   });
 
   for (let index = 1; index < points.length; index += 1) {
@@ -193,7 +237,12 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
     const direction = end.clone().sub(start);
     const segment = addMesh(
       root,
-      new CylinderGeometry(0.052, 0.052, direction.length(), 10),
+      new CylinderGeometry(
+        treatment.radius,
+        treatment.radius,
+        direction.length(),
+        10,
+      ),
       material,
       [(start.x + end.x) / 2, (start.y + end.y) / 2, (start.z + end.z) / 2],
     );
@@ -204,11 +253,12 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
     );
 
     if (index < points.length - 1) {
-      addMesh(root, new SphereGeometry(0.054, 10, 10), material, [
-        end.x,
-        end.y,
-        end.z,
-      ]);
+      addMesh(
+        root,
+        new SphereGeometry(treatment.radius * 1.04, 10, 10),
+        material,
+        [end.x, end.y, end.z],
+      );
     }
   }
 
@@ -228,6 +278,8 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
       last.clone().sub(beforeLast),
       material,
       "Forward Arrow",
+      treatment.arrowRadius,
+      treatment.arrowHeight,
     );
   }
 
@@ -242,6 +294,8 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
       first.clone().sub(second),
       material,
       "Backward Arrow",
+      treatment.arrowRadius,
+      treatment.arrowHeight,
     );
   }
 

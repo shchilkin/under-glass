@@ -31,7 +31,7 @@ describe("projected label layout", () => {
     );
     const placed = labelRectangle(position, { height: 20, width: 80 });
 
-    expect(position).toEqual({ x: 240, y: 148 });
+    expect(position).toEqual({ x: 240, y: 164 });
     expect(
       occupied.some((rectangle) => rectanglesOverlap(placed, rectangle)),
     ).toBe(false);

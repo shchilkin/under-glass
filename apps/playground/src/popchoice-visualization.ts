@@ -122,38 +122,43 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "web" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "primary",
     },
     {
       id: "web-redis",
-      label: "Enqueue work",
+      label: "Enqueue",
       source: { nodeId: "web" },
       target: { nodeId: "redis" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "primary",
     },
     {
       id: "redis-workers",
-      label: "BullMQ jobs",
+      label: "Jobs",
       source: { nodeId: "redis" },
       target: { nodeId: "workers" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "primary",
     },
     {
       id: "workers-postgres",
-      label: "Persist results",
+      label: "Persist",
       source: { nodeId: "workers" },
       target: { nodeId: "postgres" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "primary",
     },
     {
       id: "web-postgres",
-      label: "SQL + pgvector",
+      label: "Query · results",
       source: { nodeId: "web" },
       target: { nodeId: "postgres" },
       direction: "bidirectional",
       routeAnchors: [],
+      styleKey: "primary",
     },
     {
       id: "workers-openai",
@@ -162,6 +167,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "openai-api" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "workers-tmdb",
@@ -170,6 +176,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "tmdb-api" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "backoffice-postgres",
@@ -178,6 +185,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "postgres" },
       direction: "bidirectional",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "backoffice-redis",
@@ -186,6 +194,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "redis" },
       direction: "bidirectional",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "bull-board-redis",
@@ -194,6 +203,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "redis" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "movie-discovery-tmdb",
@@ -202,6 +212,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "tmdb-api" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "movie-discovery-openai",
@@ -210,6 +221,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "openai-api" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "movie-discovery-postgres",
@@ -218,6 +230,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       target: { nodeId: "postgres" },
       direction: "oneWay",
       routeAnchors: [],
+      styleKey: "supporting",
     },
     {
       id: "web-telemetry",
