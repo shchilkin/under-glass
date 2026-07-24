@@ -36,6 +36,10 @@ _Avoid_: Diagram, document, project
 The author-defined camera mode, quarter-turn orientation, and framing used when a Viewer first presents a Visualization.
 _Avoid_: Saved view, camera state, viewport
 
+**Camera Mode Transition**:
+A transient camera orbit between the canonical isometric and top modes that preserves the scene center, quarter-turn orientation, and Ground Span without changing the Visualization. The latest requested mode always becomes its target, including while a previous transition is still moving; scene labels remain visible and anchored throughout. When the visitor prefers reduced motion, the target mode is applied immediately instead.
+_Avoid_: Scene rotation, view morph, saved camera animation
+
 **Poster**:
 A deterministic static rendering of a Visualization's Opening View, used before hydration or when interactive rendering is unavailable.
 _Avoid_: Screenshot, thumbnail, fallback image

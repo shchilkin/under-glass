@@ -1,8 +1,12 @@
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
   Color,
   DirectionalLight,
-  PerspectiveCamera,
+  Group,
+  HemisphereLight,
+  OrthographicCamera,
+  PCFShadowMap,
   Scene,
   SRGBColorSpace,
   WebGLRenderer,
@@ -10,8 +14,18 @@ import {
   type Object3D,
 } from "three";
 
-import type { AssetDefinition, Node, Visualization } from "@under-glass/core";
-import { validateVisualizationSemantics } from "@under-glass/core";
+import type {
+  AssetDefinition,
+  BasicConnectionRoute,
+  GroundBounds,
+  Node,
+  OpeningView,
+  Visualization,
+} from "@under-glass/core";
+import {
+  routeBasicConnections,
+  validateVisualizationSemantics,
+} from "@under-glass/core";
 
 import {
   createAssetSession,
@@ -20,6 +34,7 @@ import {
   type PreparedNodeAsset,
 } from "./asset-session.js";
 import { parseGlb } from "./glb.js";
+import { createLabelOverlay, type LabelOverlay } from "./label-overlay.js";
 import {
   disposeObjectResourceRoots,
   disposeObjectResources,
@@ -28,20 +43,55 @@ import {
   createAssetPlaceholder,
   createGroundPlane,
   createPlacedAsset,
+  derivePlacedFootprintGroundBounds,
   updateAssetPlaceholder,
   updateGroundPlane,
 } from "./scene-layout.js";
+import {
+  beginCameraModeTransition,
+  sampleCameraModeTransition,
+  type CameraModeTransition,
+} from "./camera-mode-transition.js";
+import {
+  applyOpeningViewTransition,
+  createOpeningViewCamera,
+  deriveOpeningViewCameraPoses,
+  type CameraMode,
+  type OpeningViewCameraPoses,
+} from "./scene-camera.js";
+import {
+  createConnectionRoute,
+  createGroupSurface,
+  createInfiniteGrid,
+  updateInfiniteGrid,
+} from "./scene-graph.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
 import type {
+  CameraMotion,
   CreateSceneRendererOptions,
   SceneRenderer,
   SceneRendererDiagnostic,
+  SetCameraModeOptions,
 } from "./types.js";
 
 interface RenderingSurface {
-  readonly camera: PerspectiveCamera;
+  readonly camera: OrthographicCamera;
   readonly canvas: HTMLCanvasElement;
+  animationFrameId: number | null;
+  cameraMotion: CameraMotion;
+  cameraMode: CameraMode;
+  readonly cameraPoses: OpeningViewCameraPoses;
+  cameraProgress: number;
+  cameraTransition: CameraModeTransition | null;
+  cameraVelocity: number;
+  readonly connectionLayer: Group;
+  readonly container: HTMLElement;
+  readonly groundGrid: Group;
   readonly groundPlane: Mesh;
+  readonly labels: LabelOverlay;
+  readonly openingView: OpeningView;
+  readonly reducedMotion: MediaQueryList;
+  reducedMotionListener: (() => void) | null;
   readonly resizeObserver: ResizeObserver;
   readonly scene: Scene;
   readonly webGlRenderer: WebGLRenderer;
@@ -50,7 +100,9 @@ interface RenderingSurface {
 interface RendererSession {
   readonly assetDefinitionsByNode: Map<string, AssetDefinition>;
   readonly assets: AssetSession;
+  readonly footprintsByNode: Map<string, GroundBounds>;
   readonly placeholders: Map<string, Mesh>;
+  routes: BasicConnectionRoute[];
   disposed: boolean;
   surface: RenderingSurface | null;
 }
@@ -94,6 +146,42 @@ function removeAssetPlaceholder(
 
 function renderSurface(surface: RenderingSurface): void {
   surface.webGlRenderer.render(surface.scene, surface.camera);
+  surface.labels.render(surface.camera);
+}
+
+function applyCurrentCameraPose(
+  surface: RenderingSurface,
+  width: number,
+  height: number,
+): void {
+  applyOpeningViewTransition(
+    surface.camera,
+    surface.openingView,
+    surface.cameraPoses,
+    surface.cameraProgress,
+    width,
+    height,
+  );
+}
+
+function updateGridCoverage(
+  surface: RenderingSurface,
+  width: number,
+  height: number,
+): void {
+  const progress = surface.cameraProgress;
+
+  applyOpeningViewTransition(
+    surface.camera,
+    surface.openingView,
+    surface.cameraPoses,
+    0,
+    width,
+    height,
+  );
+  updateInfiniteGrid(surface.groundGrid, surface.camera);
+  surface.cameraProgress = progress;
+  applyCurrentCameraPose(surface, width, height);
 }
 
 function resizeSurface(
@@ -103,15 +191,111 @@ function resizeSurface(
   const width = Math.max(1, container.clientWidth);
   const height = Math.max(1, container.clientHeight);
 
-  surface.camera.aspect = width / height;
-  surface.camera.updateProjectionMatrix();
   surface.webGlRenderer.setSize(width, height, false);
+  updateGridCoverage(surface, width, height);
   renderSurface(surface);
+}
+
+function renderCurrentCameraPose(surface: RenderingSurface): void {
+  const width = Math.max(1, surface.container.clientWidth);
+  const height = Math.max(1, surface.container.clientHeight);
+
+  applyCurrentCameraPose(surface, width, height);
+  renderSurface(surface);
+}
+
+function stopCameraAnimation(surface: RenderingSurface): void {
+  if (surface.animationFrameId !== null) {
+    cancelAnimationFrame(surface.animationFrameId);
+    surface.animationFrameId = null;
+  }
+}
+
+function finishCameraModeImmediately(
+  surface: RenderingSurface,
+  cameraMode: CameraMode,
+): void {
+  stopCameraAnimation(surface);
+  surface.cameraMode = cameraMode;
+  surface.cameraProgress = cameraMode === "top" ? 1 : 0;
+  surface.cameraTransition = null;
+  surface.cameraVelocity = 0;
+  surface.container.dataset.underGlassCameraMode = cameraMode;
+  surface.container.dataset.underGlassCameraTransition = "idle";
+  renderCurrentCameraPose(surface);
+}
+
+function sampleActiveCameraTransition(
+  surface: RenderingSurface,
+  now: number,
+): boolean {
+  const transition = surface.cameraTransition;
+
+  if (transition === null) {
+    return true;
+  }
+
+  const sample = sampleCameraModeTransition(transition, now);
+  surface.cameraProgress = sample.progress;
+  surface.cameraVelocity = sample.velocity;
+  renderCurrentCameraPose(surface);
+
+  if (sample.complete) {
+    surface.cameraTransition = null;
+    surface.cameraVelocity = 0;
+    surface.animationFrameId = null;
+    surface.container.dataset.underGlassCameraTransition = "idle";
+  }
+
+  return sample.complete;
+}
+
+function animateCameraTransition(surface: RenderingSurface, now: number): void {
+  if (sampleActiveCameraTransition(surface, now)) {
+    return;
+  }
+
+  surface.animationFrameId = requestAnimationFrame((timestamp) => {
+    animateCameraTransition(surface, timestamp);
+  });
+}
+
+function startCameraModeTransition(
+  surface: RenderingSurface,
+  cameraMode: CameraMode,
+): void {
+  const now = performance.now();
+
+  stopCameraAnimation(surface);
+  if (surface.cameraTransition !== null) {
+    sampleActiveCameraTransition(surface, now);
+  }
+
+  surface.cameraMode = cameraMode;
+  surface.container.dataset.underGlassCameraMode = cameraMode;
+  surface.cameraTransition = beginCameraModeTransition({
+    from: surface.cameraProgress,
+    now,
+    profile: surface.cameraMotion,
+    to: cameraMode === "top" ? 1 : 0,
+    velocity: surface.cameraVelocity,
+  });
+
+  if (surface.cameraTransition.duration === 0) {
+    finishCameraModeImmediately(surface, cameraMode);
+    return;
+  }
+
+  surface.container.dataset.underGlassCameraTransition = "moving";
+  surface.animationFrameId = requestAnimationFrame((timestamp) => {
+    animateCameraTransition(surface, timestamp);
+  });
 }
 
 function createRenderingSurface(
   container: HTMLElement,
   visualization: Visualization,
+  cameraMotion: CameraMotion,
 ): RenderingSurface {
   const canvas = document.createElement("canvas");
   const webGlRenderer = new WebGLRenderer({
@@ -120,9 +304,14 @@ function createRenderingSurface(
     powerPreference: "high-performance",
   });
   const scene = new Scene();
-  const camera = new PerspectiveCamera(40, 1, 0.1, 100);
+  const camera = createOpeningViewCamera();
+  const cameraProgress = visualization.openingView.cameraMode === "top" ? 1 : 0;
+  const cameraPoses = deriveOpeningViewCameraPoses(visualization.openingView);
   const center = visualization.openingView.center;
   const groundPlane = createGroundPlane(visualization, new Map());
+  const groundGrid = createInfiniteGrid();
+  const connectionLayer = new Group();
+  const labels = createLabelOverlay(container, visualization);
 
   canvas.dataset.underGlassRenderer = "";
   canvas.setAttribute("aria-hidden", "true");
@@ -133,21 +322,56 @@ function createRenderingSurface(
 
   webGlRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   webGlRenderer.outputColorSpace = SRGBColorSpace;
-  scene.background = new Color(0x111816);
-  scene.add(new AmbientLight(0xffffff, 1.7));
+  webGlRenderer.shadowMap.enabled = true;
+  webGlRenderer.shadowMap.type = PCFShadowMap;
+  webGlRenderer.toneMapping = ACESFilmicToneMapping;
+  webGlRenderer.toneMappingExposure = 1.08;
+  scene.background = new Color(0x0e1311);
+  scene.add(new HemisphereLight(0xe8f3ed, 0x18201d, 1.6));
+  scene.add(new AmbientLight(0xffffff, 0.65));
   scene.add(groundPlane);
+  scene.add(groundGrid);
 
-  const keyLight = new DirectionalLight(0xffffff, 3.2);
-  keyLight.position.set(center.x + 4, 7, center.z + 5);
+  for (const group of visualization.groups) {
+    scene.add(createGroupSurface(group));
+  }
+
+  connectionLayer.name = "Connections";
+  scene.add(connectionLayer);
+
+  const keyLight = new DirectionalLight(0xffffff, 3.6);
+  keyLight.position.set(center.x - 6, 11, center.z + 7);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(1024, 1024);
+  keyLight.shadow.bias = -0.0004;
+  keyLight.shadow.radius = 4;
   scene.add(keyLight);
+  const fillLight = new DirectionalLight(0xa9d7c0, 1.1);
+  fillLight.position.set(center.x + 8, 6, center.z - 8);
+  scene.add(fillLight);
 
-  camera.position.set(center.x + 5, 4.5, center.z + 6);
-  camera.lookAt(center.x, 0, center.z);
+  container.dataset.underGlassCameraMode = visualization.openingView.cameraMode;
+  container.dataset.underGlassCameraMotion = cameraMotion;
+  container.dataset.underGlassCameraTransition = "idle";
 
   const surface: RenderingSurface = {
+    animationFrameId: null,
     camera,
     canvas,
+    cameraMotion,
+    cameraMode: visualization.openingView.cameraMode,
+    cameraPoses,
+    cameraProgress,
+    cameraTransition: null,
+    cameraVelocity: 0,
+    connectionLayer,
+    container,
+    groundGrid,
     groundPlane,
+    labels,
+    openingView: visualization.openingView,
+    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)"),
+    reducedMotionListener: null,
     resizeObserver: new ResizeObserver(() => {
       resizeSurface(surface, container);
     }),
@@ -155,9 +379,47 @@ function createRenderingSurface(
     webGlRenderer,
   };
 
+  surface.reducedMotionListener = () => {
+    if (surface.reducedMotion.matches) {
+      finishCameraModeImmediately(surface, surface.cameraMode);
+    }
+  };
+  surface.reducedMotion.addEventListener(
+    "change",
+    surface.reducedMotionListener,
+  );
   surface.resizeObserver.observe(container);
   resizeSurface(surface, container);
   return surface;
+}
+
+function updateGraphPresentation(
+  visualization: Visualization,
+  surface: RenderingSurface,
+  session: RendererSession,
+): void {
+  for (const child of [...surface.connectionLayer.children]) {
+    surface.connectionLayer.remove(child);
+    disposeObjectResources(child);
+  }
+
+  session.routes = routeBasicConnections(
+    visualization,
+    session.footprintsByNode,
+  );
+
+  for (const route of session.routes) {
+    surface.connectionLayer.add(createConnectionRoute(route));
+  }
+
+  surface.labels.setRoutes(session.routes);
+  updateGroundPlane(
+    surface.groundPlane,
+    visualization,
+    session.assetDefinitionsByNode,
+    session.routes,
+  );
+  renderSurface(surface);
 }
 
 function applyResolvedAssetDefinition(
@@ -166,18 +428,21 @@ function applyResolvedAssetDefinition(
   context: NodeLoadContext,
 ): void {
   context.session.assetDefinitionsByNode.set(node.id, definition);
+  context.session.footprintsByNode.set(
+    node.id,
+    derivePlacedFootprintGroundBounds(node, definition),
+  );
   const placeholder = context.session.placeholders.get(node.id);
 
   if (placeholder !== undefined) {
     updateAssetPlaceholder(placeholder, node, definition);
   }
 
-  updateGroundPlane(
-    context.surface.groundPlane,
+  updateGraphPresentation(
     context.options.visualization,
-    context.session.assetDefinitionsByNode,
+    context.surface,
+    context.session,
   );
-  renderSurface(context.surface);
 }
 
 async function prepareNodeAsset(
@@ -277,22 +542,20 @@ function disposeSurface(
   surface: RenderingSurface,
   assetRoots: Iterable<Object3D>,
 ): void {
+  stopCameraAnimation(surface);
+  if (surface.reducedMotionListener !== null) {
+    surface.reducedMotion.removeEventListener(
+      "change",
+      surface.reducedMotionListener,
+    );
+  }
   surface.resizeObserver.disconnect();
+  surface.labels.dispose();
   disposeObjectResourceRoots([surface.scene, ...assetRoots]);
   surface.webGlRenderer.renderLists.dispose();
   surface.webGlRenderer.dispose();
   surface.webGlRenderer.forceContextLoss();
   surface.canvas.remove();
-}
-
-function unsupportedConnectionsDiagnostic(
-  connectionCount: number,
-): SceneRendererDiagnostic {
-  return {
-    code: "unsupported-connections",
-    message: `Connections are deferred to v0.2; received ${connectionCount}.`,
-    severity: "error",
-  };
 }
 
 function rendererUnavailableDiagnostic(
@@ -339,10 +602,6 @@ function semanticDiagnostics(
 function visualizationDiagnostics(
   visualization: Visualization,
 ): SceneRendererDiagnostic[] {
-  if (visualization.connections.length > 0) {
-    return [unsupportedConnectionsDiagnostic(visualization.connections.length)];
-  }
-
   return semanticDiagnostics(visualization);
 }
 
@@ -376,6 +635,62 @@ async function loadNodes(
   }
 }
 
+function applyRecoverableDiagnostics(
+  diagnostics: readonly SceneRendererDiagnostic[],
+  store: SceneStateStore,
+): void {
+  const recoverableDiagnostics = diagnosticsWithSeverity(
+    diagnostics,
+    "warning",
+  );
+
+  if (recoverableDiagnostics.length === 0) {
+    return;
+  }
+
+  store.setSnapshot({
+    diagnostics: recoverableDiagnostics,
+    status: "loading",
+  });
+}
+
+function initializeSceneRendering(
+  options: CreateSceneRendererOptions,
+  store: SceneStateStore,
+  session: RendererSession,
+  diagnostics: readonly SceneRendererDiagnostic[],
+): RenderingSurface {
+  const surface = createRenderingSurface(
+    options.container,
+    options.visualization,
+    options.cameraMotion ?? "responsive",
+  );
+
+  applyRecoverableDiagnostics(diagnostics, store);
+  addAssetPlaceholders(options.visualization.nodes, surface, session);
+  updateGraphPresentation(options.visualization, surface, session);
+  void loadNodes(options.visualization.nodes, options, surface, store, session);
+  return surface;
+}
+
+function startValidSceneRendering(
+  options: CreateSceneRendererOptions,
+  store: SceneStateStore,
+  session: RendererSession,
+  diagnostics: readonly SceneRendererDiagnostic[],
+): RenderingSurface | null {
+  try {
+    return initializeSceneRendering(options, store, session, diagnostics);
+  } catch (error) {
+    deferFailedLifecycle(
+      store,
+      [rendererUnavailableDiagnostic(error)],
+      () => session.disposed,
+    );
+    return null;
+  }
+}
+
 function startSceneRendering(
   options: CreateSceneRendererOptions,
   store: SceneStateStore,
@@ -389,40 +704,7 @@ function startSceneRendering(
     return null;
   }
 
-  try {
-    const surface = createRenderingSurface(
-      options.container,
-      options.visualization,
-    );
-    const recoverableDiagnostics = diagnosticsWithSeverity(
-      diagnostics,
-      "warning",
-    );
-
-    if (recoverableDiagnostics.length > 0) {
-      store.setSnapshot({
-        diagnostics: recoverableDiagnostics,
-        status: "loading",
-      });
-    }
-
-    addAssetPlaceholders(options.visualization.nodes, surface, session);
-    void loadNodes(
-      options.visualization.nodes,
-      options,
-      surface,
-      store,
-      session,
-    );
-    return surface;
-  } catch (error) {
-    deferFailedLifecycle(
-      store,
-      [rendererUnavailableDiagnostic(error)],
-      () => session.disposed,
-    );
-    return null;
-  }
+  return startValidSceneRendering(options, store, session, diagnostics);
 }
 
 function disposeRendererSession(
@@ -441,6 +723,54 @@ function disposeRendererSession(
   }
 }
 
+function activeRenderingSurface(
+  session: RendererSession,
+): RenderingSurface | null {
+  if (session.disposed) {
+    return null;
+  }
+
+  return session.surface;
+}
+
+function shouldApplyCameraModeImmediately(
+  surface: RenderingSurface,
+  options: SetCameraModeOptions | undefined,
+): boolean {
+  return options?.transition === "immediate" || surface.reducedMotion.matches;
+}
+
+function updateCameraMode(
+  surface: RenderingSurface,
+  cameraMode: CameraMode,
+  options: SetCameraModeOptions | undefined,
+): void {
+  if (shouldApplyCameraModeImmediately(surface, options)) {
+    finishCameraModeImmediately(surface, cameraMode);
+    return;
+  }
+
+  if (surface.cameraMode === cameraMode) {
+    return;
+  }
+
+  startCameraModeTransition(surface, cameraMode);
+}
+
+function setSessionCameraMode(
+  session: RendererSession,
+  cameraMode: CameraMode,
+  options: SetCameraModeOptions | undefined,
+): void {
+  const surface = activeRenderingSurface(session);
+
+  if (surface === null) {
+    return;
+  }
+
+  updateCameraMode(surface, cameraMode, options);
+}
+
 function createSceneRendererHandle(
   store: SceneStateStore,
   session: RendererSession,
@@ -450,6 +780,19 @@ function createSceneRendererHandle(
       disposeRendererSession(store, session);
     },
     getSnapshot: store.getSnapshot,
+    setCameraMotion(cameraMotion: CameraMotion): void {
+      const surface = session.surface;
+
+      if (session.disposed || surface === null) {
+        return;
+      }
+
+      surface.cameraMotion = cameraMotion;
+      surface.container.dataset.underGlassCameraMotion = cameraMotion;
+    },
+    setCameraMode(cameraMode: CameraMode, options): void {
+      setSessionCameraMode(session, cameraMode, options);
+    },
     subscribe: store.subscribe,
   };
 }
@@ -467,7 +810,9 @@ export function createSceneRenderer(
       parseAsset: parseGlb,
       resolveAsset: options.resolveAsset,
     }),
+    footprintsByNode: new Map(),
     placeholders: new Map(),
+    routes: [],
     disposed: false,
     surface: null,
   };

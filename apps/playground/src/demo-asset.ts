@@ -17,6 +17,95 @@ const demoAssetDefinition: AssetDefinition = parseAssetDefinition({
   },
 });
 
+interface DemoGlbNode {
+  readonly mesh: 0;
+  readonly scale: readonly [number, number, number];
+  readonly translation: readonly [number, number, number];
+}
+
+interface DemoAssetVariant {
+  readonly color: readonly [number, number, number, number];
+  readonly definition: AssetDefinition;
+  readonly nodes: readonly DemoGlbNode[];
+}
+
+function variantDefinition(
+  assetId: string,
+  footprint: AssetDefinition["footprint"],
+): AssetDefinition {
+  return parseAssetDefinition({
+    schemaVersion: 1,
+    assetId,
+    scale: 1,
+    normalizationRotation: { x: 0, y: 0, z: 0, w: 1 },
+    groundContact: { x: 0, y: 0, z: 0 },
+    footprint,
+    provenance: {
+      license: "CC0-1.0",
+      source: "Generated in the Under Glass repository",
+    },
+  });
+}
+
+const DEMO_ASSET_VARIANTS: Readonly<Record<string, DemoAssetVariant>> = {
+  "browser-asset": {
+    color: [0.08, 0.12, 0.11, 1],
+    definition: variantDefinition("browser-asset", {
+      minX: -0.8,
+      minZ: -0.55,
+      maxX: 0.8,
+      maxZ: 0.55,
+    }),
+    nodes: [
+      { mesh: 0, scale: [1.3, 0.8, 0.1], translation: [0, 0.55, -0.1] },
+      { mesh: 0, scale: [0.16, 0.55, 0.12], translation: [0, 0.28, 0.1] },
+      { mesh: 0, scale: [0.7, 0.1, 0.4], translation: [0, 0.05, 0.16] },
+    ],
+  },
+  "database-asset": {
+    color: [0.07, 0.13, 0.1, 1],
+    definition: variantDefinition("database-asset", {
+      minX: -0.7,
+      minZ: -0.7,
+      maxX: 0.7,
+      maxZ: 0.7,
+    }),
+    nodes: [
+      { mesh: 0, scale: [1.1, 0.2, 0.55], translation: [0, 0.16, 0] },
+      { mesh: 0, scale: [1.1, 0.2, 0.55], translation: [0, 0.44, 0] },
+      { mesh: 0, scale: [1.1, 0.2, 0.55], translation: [0, 0.72, 0] },
+    ],
+  },
+  "queue-asset": {
+    color: [0.07, 0.16, 0.12, 1],
+    definition: variantDefinition("queue-asset", {
+      minX: -0.9,
+      minZ: -0.55,
+      maxX: 0.9,
+      maxZ: 0.55,
+    }),
+    nodes: [-0.6, -0.2, 0.2, 0.6].map((x) => ({
+      mesh: 0,
+      scale: [0.22, 0.62, 0.34],
+      translation: [x, 0.31, 0],
+    })),
+  },
+  "service-asset": {
+    color: [0.06, 0.11, 0.09, 1],
+    definition: variantDefinition("service-asset", {
+      minX: -0.65,
+      minZ: -0.6,
+      maxX: 0.65,
+      maxZ: 0.6,
+    }),
+    nodes: [
+      { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.15, 0] },
+      { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.43, 0] },
+      { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.71, 0] },
+    ],
+  },
+};
+
 function decodeBase64(base64: string): ArrayBuffer {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -28,7 +117,10 @@ function decodeBase64(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export function markDemoGlbAsCompressed(bytes: ArrayBuffer): ArrayBuffer {
+function rewriteDemoGlb(
+  bytes: ArrayBuffer,
+  rewrite: (gltf: Record<string, unknown>) => void,
+): ArrayBuffer {
   const source = new Uint8Array(bytes);
   const sourceView = new DataView(bytes);
   const jsonLength = sourceView.getUint32(12, true);
@@ -38,10 +130,7 @@ export function markDemoGlbAsCompressed(bytes: ArrayBuffer): ArrayBuffer {
     .decode(source.subarray(jsonStart, jsonEnd))
     .trimEnd();
   const gltf = JSON.parse(jsonText) as Record<string, unknown>;
-  const compressionExtension = "KHR_draco_mesh_compression";
-
-  gltf.extensionsUsed = [compressionExtension];
-  gltf.extensionsRequired = [compressionExtension];
+  rewrite(gltf);
 
   const encodedJson = new TextEncoder().encode(JSON.stringify(gltf));
   const paddedJsonLength = Math.ceil(encodedJson.length / 4) * 4;
@@ -61,15 +150,68 @@ export function markDemoGlbAsCompressed(bytes: ArrayBuffer): ArrayBuffer {
   return output.buffer;
 }
 
+export function markDemoGlbAsCompressed(bytes: ArrayBuffer): ArrayBuffer {
+  return rewriteDemoGlb(bytes, (gltf) => {
+    const compressionExtension = "KHR_draco_mesh_compression";
+
+    gltf.extensionsUsed = [compressionExtension];
+    gltf.extensionsRequired = [compressionExtension];
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function applyVariantMaterialColor(
+  materials: unknown,
+  color: DemoAssetVariant["color"],
+): void {
+  if (!Array.isArray(materials)) {
+    return;
+  }
+
+  const firstMaterial = materials[0];
+
+  if (!isRecord(firstMaterial)) {
+    return;
+  }
+
+  const pbr = firstMaterial.pbrMetallicRoughness;
+
+  if (!isRecord(pbr)) {
+    return;
+  }
+
+  pbr.baseColorFactor = color;
+}
+
+function createVariantGlb(variant: DemoAssetVariant): ArrayBuffer {
+  return rewriteDemoGlb(decodeBase64(DEMO_GLB_BASE64), (gltf) => {
+    gltf.nodes = variant.nodes;
+    gltf.scenes = [{ nodes: variant.nodes.map((_node, index) => index) }];
+    applyVariantMaterialColor(gltf.materials, variant.color);
+  });
+}
+
 export async function resolveDemoAsset(
   assetId: string,
 ): Promise<ResolvedAsset> {
-  if (assetId !== demoAssetDefinition.assetId) {
+  if (assetId === demoAssetDefinition.assetId) {
+    return {
+      bytes: decodeBase64(DEMO_GLB_BASE64),
+      definition: demoAssetDefinition,
+    };
+  }
+
+  const variant = DEMO_ASSET_VARIANTS[assetId];
+
+  if (variant === undefined) {
     throw new Error(`Unknown demo Asset ID "${assetId}".`);
   }
 
   return {
-    bytes: decodeBase64(DEMO_GLB_BASE64),
-    definition: demoAssetDefinition,
+    bytes: createVariantGlb(variant),
+    definition: variant.definition,
   };
 }

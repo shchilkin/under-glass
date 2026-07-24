@@ -1,4 +1,10 @@
 export {
+  deriveVisualizationBounds,
+  routeBasicConnections,
+  type BasicConnectionRoute,
+} from "./basic-routing.js";
+
+export {
   ASSET_DEFINITION_SCHEMA_VERSION,
   assetDefinitionSchema,
   parseAssetDefinition,

@@ -1,6 +1,7 @@
 import type {
   AssetDefinition,
   DiagnosticSeverity,
+  OpeningView,
   Visualization,
 } from "@under-glass/core";
 
@@ -11,7 +12,6 @@ export type SceneRendererDiagnosticCode =
   | "asset-load-failed"
   | "node-outside-group-bounds"
   | "renderer-unavailable"
-  | "unsupported-connections"
   | "visualization-invalid";
 
 export interface SceneRendererDiagnostic {
@@ -33,14 +33,26 @@ export interface ResolvedAsset {
 
 export type AssetResolver = (assetId: string) => Promise<ResolvedAsset>;
 
+export type CameraMotion = "responsive" | "spring";
+
 export interface CreateSceneRendererOptions {
+  readonly cameraMotion?: CameraMotion;
   readonly container: HTMLElement;
   readonly resolveAsset: AssetResolver;
   readonly visualization: Visualization;
 }
 
+export interface SetCameraModeOptions {
+  readonly transition?: "auto" | "immediate";
+}
+
 export interface SceneRenderer {
   dispose(): void;
   getSnapshot(): SceneRendererSnapshot;
+  setCameraMotion(cameraMotion: CameraMotion): void;
+  setCameraMode(
+    cameraMode: OpeningView["cameraMode"],
+    options?: SetCameraModeOptions,
+  ): void;
   subscribe(listener: () => void): () => void;
 }

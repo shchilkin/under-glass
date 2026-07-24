@@ -81,6 +81,8 @@ The MVP router has no external layout or routing-engine dependency. Within the s
 
 Isometric and top modes use the same coordinates and Connection Routes. The scene can rotate in 90-degree steps; both modes support pan and zoom. Nodes rotate in 90-degree steps with their footprints and ports.
 
+The renderer accepts a named `cameraMotion` option with `responsive` as the default and `spring` as the expressive alternative. The future React Viewer maps the same choice to a prop. Hosts choose between those supported motion contracts rather than supplying arbitrary duration or easing values.
+
 Node labels face the screen, avoid collisions, and use zoom-based visibility; a selected Node label remains visible. The Viewer opens at the author-defined Opening View. Visitor pan and zoom are transient.
 
 Original PBR materials remain authoritative. Lighting, Ground Plane, labels, Groups, Connections, hover, selection, dimming, and optional tint come from the Scene Theme.
