@@ -1,0 +1,23 @@
+{
+  "name": "@under-glass/test-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --config tsdown.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@under-glass/core": "0.0.0",
+    "@under-glass/three": "0.0.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

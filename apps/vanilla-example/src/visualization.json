@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "nodes": [
+    {
+      "id": "browser",
+      "label": "Browser",
+      "assetId": "demo-system",
+      "position": { "x": -3, "z": 0 },
+      "quarterTurns": 0
+    },
+    {
+      "id": "service",
+      "label": "Recommendation service",
+      "assetId": "demo-system",
+      "groupId": "runtime",
+      "position": { "x": 0, "z": 0 },
+      "quarterTurns": 1
+    },
+    {
+      "id": "database",
+      "label": "Project data",
+      "assetId": "demo-system",
+      "groupId": "runtime",
+      "position": { "x": 3, "z": 0 },
+      "quarterTurns": 0
+    }
+  ],
+  "groups": [
+    {
+      "id": "runtime",
+      "label": "Host runtime",
+      "bounds": {
+        "minX": -1.2,
+        "minZ": -1.8,
+        "maxX": 4.2,
+        "maxZ": 1.8
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "browser-service",
+      "label": "HTTPS",
+      "source": { "nodeId": "browser" },
+      "target": { "nodeId": "service" },
+      "direction": "oneWay",
+      "routeAnchors": []
+    },
+    {
+      "id": "service-database",
+      "label": "Query",
+      "source": { "nodeId": "service" },
+      "target": { "nodeId": "database" },
+      "direction": "bidirectional",
+      "routeAnchors": []
+    }
+  ],
+  "openingView": {
+    "cameraMode": "isometric",
+    "quarterTurns": 0,
+    "center": { "x": 0.5, "z": 0 },
+    "groundSpan": 11
+  }
+}

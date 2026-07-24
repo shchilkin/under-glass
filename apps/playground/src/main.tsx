@@ -15,8 +15,11 @@ import {
   type SceneRendererSnapshot,
   type SceneRendererStatus,
 } from "@under-glass/three";
+import {
+  markDemoGlbAsCompressed,
+  resolveDemoAsset,
+} from "@under-glass/test-fixtures";
 
-import { markDemoGlbAsCompressed, resolveDemoAsset } from "./demo-asset.js";
 import {
   DEFAULT_POPCHOICE_VIEW_ID,
   POPCHOICE_VIEW_IDS,

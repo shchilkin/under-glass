@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Under Glass vanilla integration</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">Plain TypeScript consumer</p>
+          <h1>Vanilla integration</h1>
+          <p class="lede">
+            Host JSON and a host-owned Asset Resolver mounted without React.
+          </p>
+        </div>
+        <div aria-label="Camera mode" class="camera-controls">
+          <button aria-pressed="true" data-camera-mode="isometric">
+            Isometric
+          </button>
+          <button aria-pressed="false" data-camera-mode="top">Top</button>
+        </div>
+      </header>
+      <section aria-label="Under Glass vanilla Viewer" id="viewer"></section>
+      <footer>
+        <span>Status</span>
+        <strong id="status">loading</strong>
+        <span>Nodes</span>
+        <strong id="node-count">0</strong>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

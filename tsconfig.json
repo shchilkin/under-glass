@@ -19,7 +19,8 @@
       "@under-glass/web": ["./packages/web/src/index.ts"],
       "@under-glass/react": ["./packages/react/src/index.ts"],
       "@under-glass/poster": ["./packages/poster/src/index.ts"],
-      "@under-glass/starter-assets": ["./packages/starter-assets/src/index.ts"]
+      "@under-glass/starter-assets": ["./packages/starter-assets/src/index.ts"],
+      "@under-glass/test-fixtures": ["./packages/test-fixtures/src/index.ts"]
     }
   }
 }

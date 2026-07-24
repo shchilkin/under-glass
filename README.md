@@ -12,7 +12,8 @@ The repository is in its bootstrap stage. The product boundaries and accepted ar
 - `@under-glass/react`: React 19 adapters and the future Editor;
 - `@under-glass/poster`: build-time poster request and CLI boundary;
 - `@under-glass/starter-assets`: optional vendor-neutral starter asset catalog;
-- `@under-glass/playground`: integration playground.
+- `@under-glass/playground`: React integration playground;
+- `@under-glass/vanilla-example`: plain TypeScript integration example.
 
 ## Development
 
@@ -40,6 +41,41 @@ const renderer = createSceneRenderer({
 renderer.setCameraMotion("responsive");
 ```
 
-The future React Viewer exposes the same choice as its
-`cameraMotion="responsive" | "spring"` prop. Hosts choose a supported motion
-character rather than supplying arbitrary durations or easing curves.
+Hosts choose a supported motion character rather than supplying arbitrary
+durations or easing curves.
+
+## Framework-neutral Viewer
+
+`@under-glass/web` mounts the renderer without requiring React. The host remains
+responsible for validating or creating the Visualization and resolving Asset
+IDs to definitions and GLB bytes.
+
+```ts
+import { parseVisualization } from "@under-glass/core";
+import { createViewerController } from "@under-glass/web";
+
+const visualization = parseVisualization(hostJson);
+const container = document.querySelector<HTMLElement>("#viewer");
+
+if (container === null) {
+  throw new Error("Viewer container was not found.");
+}
+
+const controller = createViewerController({
+  container,
+  resolveAsset: hostAssetResolver,
+  visualization,
+});
+
+const unsubscribe = controller.subscribe(() => {
+  console.log(controller.getSnapshot());
+});
+
+controller.setCameraMode("top");
+controller.setVisualization(nextVisualization);
+
+unsubscribe();
+controller.dispose();
+```
+
+See `apps/vanilla-example` for a complete plain TypeScript consumer.
