@@ -19,7 +19,7 @@ import {
   type OrthographicCamera,
 } from "three";
 
-import type { BasicConnectionRoute, Group } from "@under-glass/core";
+import type { BasicConnectionRoute, Group, Node } from "@under-glass/core";
 
 import { disposeObjectResources } from "./resource-disposal.js";
 import { deriveViewportGroundBounds } from "./scene-camera.js";
@@ -103,6 +103,11 @@ const GROUP_LABEL_FONT_SIZE = 54;
 const GROUP_LABEL_TRACKING = 7;
 const GROUP_LABEL_WORLD_HEIGHT = 0.8;
 const GROUP_LABEL_WORLD_MARGIN = 0.42;
+const NODE_LABEL_CANVAS_HEIGHT = 96;
+const NODE_LABEL_FONT_SIZE = 44;
+const NODE_LABEL_MAX_WORLD_WIDTH = 4;
+const NODE_LABEL_WORLD_HEIGHT = 0.76;
+const NODE_LABEL_Z_OFFSET = 0.88;
 
 interface CanvasDrawingSurface {
   readonly canvas: HTMLCanvasElement;
@@ -237,6 +242,86 @@ function addGroupLabel(
   };
   label.userData.labelRole = "group";
   label.userData.text = text;
+}
+
+function createNodeLabelTexture(text: string): CanvasTexture | null {
+  const surface = createCanvasDrawingSurface();
+
+  if (surface === null) {
+    return null;
+  }
+
+  const { canvas, context } = surface;
+  const horizontalPadding = 26;
+  const font = `700 ${NODE_LABEL_FONT_SIZE}px Inter, ui-sans-serif, system-ui, sans-serif`;
+
+  context.font = font;
+  canvas.width = Math.ceil(
+    context.measureText(text).width + horizontalPadding * 2,
+  );
+  canvas.height = NODE_LABEL_CANVAS_HEIGHT;
+
+  context.font = font;
+  context.fillStyle = "#f0f5f2";
+  context.shadowColor = "rgb(0 0 0 / 92%)";
+  context.shadowBlur = 10;
+  context.shadowOffsetY = 4;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  return textureFromCanvas(canvas);
+}
+
+export function createNodeLabel(node: Node): ThreeGroup {
+  const root = new ThreeGroup();
+  const texture = createNodeLabelTexture(node.label);
+
+  root.name = `Node Label ${node.id}`;
+  root.userData.nodeLabel = {
+    rendering: "world-space",
+    text: node.label,
+  };
+
+  if (texture === null) {
+    return root;
+  }
+
+  const textureAspect =
+    (texture.image as HTMLCanvasElement).width /
+    (texture.image as HTMLCanvasElement).height;
+  const naturalWidth = NODE_LABEL_WORLD_HEIGHT * textureAspect;
+  const labelWidth = Math.min(NODE_LABEL_MAX_WORLD_WIDTH, naturalWidth);
+  const labelHeight = labelWidth / textureAspect;
+  const position = new Vector3(
+    node.position.x,
+    0.255,
+    node.position.z + NODE_LABEL_Z_OFFSET,
+  );
+  const label = addMesh(
+    root,
+    new PlaneGeometry(labelWidth, labelHeight),
+    new MeshBasicMaterial({
+      depthWrite: false,
+      map: texture,
+      opacity: 0.98,
+      toneMapped: false,
+      transparent: true,
+    }),
+    [position.x, position.y, position.z],
+  );
+
+  label.name = "Node Label";
+  label.rotation.x = -Math.PI / 2;
+  label.userData.labelBounds = {
+    depth: labelHeight,
+    width: labelWidth,
+  };
+  label.userData.labelOrigin = { x: position.x, z: position.z };
+  label.userData.labelRole = "node";
+  label.userData.labelShiftAxis = "z";
+  label.userData.text = node.label;
+  return root;
 }
 
 interface RouteTreatment {
@@ -603,7 +688,12 @@ function addRouteLabel(
     depth: placement.quarterTurn ? labelWidth : ROUTE_LABEL_WORLD_HEIGHT,
     width: placement.quarterTurn ? ROUTE_LABEL_WORLD_HEIGHT : labelWidth,
   };
+  label.userData.labelOrigin = {
+    x: placement.position.x,
+    z: placement.position.z,
+  };
   label.userData.labelRole = "connection";
+  label.userData.labelShiftAxis = placement.quarterTurn ? "x" : "z";
 
   if (placement.quarterTurn) {
     label.rotateZ(Math.PI / 2);

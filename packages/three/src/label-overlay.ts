@@ -23,40 +23,17 @@ export interface LabelOverlay {
   setRoutes(routes: readonly BasicConnectionRoute[]): void;
 }
 
-function styleLabel(
-  element: HTMLDivElement,
-  type: ProjectedLabel["type"],
-): void {
+function styleLabel(element: HTMLDivElement): void {
   element.style.position = "absolute";
   element.style.top = "0";
   element.style.left = "0";
   element.style.pointerEvents = "none";
   element.style.whiteSpace = "nowrap";
-
-  if (type === "node") {
-    element.style.padding = "2px 4px";
-    element.style.color = "#f0f4f1";
-    element.style.background = "transparent";
-    element.style.fontFamily =
-      'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
-    element.style.fontSize = "12px";
-    element.style.fontWeight = "650";
-    element.style.lineHeight = "1.2";
-    element.style.textShadow =
-      "0 2px 4px rgb(0 0 0 / 95%), 0 5px 12px rgb(0 0 0 / 60%)";
-  } else if (type === "group") {
-    element.dataset.underGlassLabelRendering = "world-space";
-    element.style.width = "1px";
-    element.style.height = "1px";
-    element.style.overflow = "hidden";
-    element.style.clipPath = "inset(50%)";
-  } else {
-    element.dataset.underGlassLabelRendering = "world-space";
-    element.style.width = "1px";
-    element.style.height = "1px";
-    element.style.overflow = "hidden";
-    element.style.clipPath = "inset(50%)";
-  }
+  element.dataset.underGlassLabelRendering = "world-space";
+  element.style.width = "1px";
+  element.style.height = "1px";
+  element.style.overflow = "hidden";
+  element.style.clipPath = "inset(50%)";
 }
 
 function createLabel(
@@ -69,7 +46,7 @@ function createLabel(
   const element = document.createElement("div");
   element.dataset.underGlassLabel = type;
   element.textContent = text;
-  styleLabel(element, type);
+  styleLabel(element);
   layer.append(element);
   return { element, offset, points, type };
 }

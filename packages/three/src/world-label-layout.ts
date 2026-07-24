@@ -14,7 +14,13 @@ interface WorldLabelRectangle {
 
 interface WorldSpaceLabels {
   readonly connectionLabels: Object3D[];
+  readonly nodeLabels: Object3D[];
   readonly occupied: WorldLabelRectangle[];
+}
+
+interface WorldLabelOrigin {
+  readonly x: number;
+  readonly z: number;
 }
 
 const LABEL_MARGIN = 0.08;
@@ -55,6 +61,7 @@ function rectanglesOverlap(
 
 function collectWorldSpaceLabels(scene: Object3D): WorldSpaceLabels {
   const connectionLabels: Object3D[] = [];
+  const nodeLabels: Object3D[] = [];
   const occupied: WorldLabelRectangle[] = [];
 
   scene.traverse((object) => {
@@ -62,6 +69,11 @@ function collectWorldSpaceLabels(scene: Object3D): WorldSpaceLabels {
 
     if (role === "connection") {
       connectionLabels.push(object);
+      return;
+    }
+
+    if (role === "node") {
+      nodeLabels.push(object);
       return;
     }
 
@@ -74,27 +86,40 @@ function collectWorldSpaceLabels(scene: Object3D): WorldSpaceLabels {
     }
   });
 
-  return { connectionLabels, occupied };
+  return { connectionLabels, nodeLabels, occupied };
 }
 
-function movePerpendicularToRoute(
+function labelOrigin(label: Object3D): WorldLabelOrigin {
+  const origin = label.userData.labelOrigin as WorldLabelOrigin | undefined;
+  return origin ?? { x: label.position.x, z: label.position.z };
+}
+
+function resetLabelPosition(label: Object3D): WorldLabelOrigin {
+  const origin = labelOrigin(label);
+  label.position.x = origin.x;
+  label.position.z = origin.z;
+  return origin;
+}
+
+function moveLabel(
   label: Object3D,
   bounds: WorldLabelBounds,
-  originX: number,
-  originZ: number,
+  origin: WorldLabelOrigin,
   attempt: number,
 ): void {
   const step = Math.ceil((attempt + 1) / 2) * COLLISION_STEP;
   const direction = attempt % 2 === 0 ? 1 : -1;
+  const authoredAxis = label.userData.labelShiftAxis as "x" | "z" | undefined;
+  const axis = authoredAxis ?? (bounds.depth > bounds.width ? "x" : "z");
 
-  if (bounds.depth > bounds.width) {
-    label.position.x = originX + step * direction;
+  if (axis === "x") {
+    label.position.x = origin.x + step * direction;
   } else {
-    label.position.z = originZ + step * direction;
+    label.position.z = origin.z + step * direction;
   }
 }
 
-function placeConnectionLabel(
+function placeWorldLabel(
   label: Object3D,
   occupied: WorldLabelRectangle[],
 ): void {
@@ -104,8 +129,7 @@ function placeConnectionLabel(
     return;
   }
 
-  const originX = label.position.x;
-  const originZ = label.position.z;
+  const origin = resetLabelPosition(label);
 
   for (let attempt = 0; attempt < MAX_PLACEMENT_ATTEMPTS; attempt += 1) {
     const rectangle = worldLabelRectangle(label);
@@ -120,14 +144,15 @@ function placeConnectionLabel(
       return;
     }
 
-    movePerpendicularToRoute(label, bounds, originX, originZ, attempt);
+    moveLabel(label, bounds, origin, attempt);
   }
 }
 
-export function separateWorldSpaceConnectionLabels(scene: Object3D): void {
-  const { connectionLabels, occupied } = collectWorldSpaceLabels(scene);
+export function layoutWorldSpaceLabels(scene: Object3D): void {
+  const { connectionLabels, nodeLabels, occupied } =
+    collectWorldSpaceLabels(scene);
 
-  for (const label of connectionLabels) {
-    placeConnectionLabel(label, occupied);
+  for (const label of [...nodeLabels, ...connectionLabels]) {
+    placeWorldLabel(label, occupied);
   }
 }

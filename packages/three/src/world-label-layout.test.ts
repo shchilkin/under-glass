@@ -1,10 +1,10 @@
 import { Group, Object3D } from "three";
 import { describe, expect, it } from "vitest";
 
-import { separateWorldSpaceConnectionLabels } from "./world-label-layout.js";
+import { layoutWorldSpaceLabels } from "./world-label-layout.js";
 
 function label(
-  role: "connection" | "group",
+  role: "connection" | "group" | "node",
   width: number,
   depth: number,
 ): Object3D {
@@ -22,7 +22,7 @@ describe("world-space label layout", () => {
     const secondRouteLabel = label("connection", 1.4, 0.4);
 
     scene.add(groupLabel, firstRouteLabel, secondRouteLabel);
-    separateWorldSpaceConnectionLabels(scene);
+    layoutWorldSpaceLabels(scene);
 
     expect(firstRouteLabel.position.x).toBe(0);
     expect(secondRouteLabel.position.x).toBe(0);
@@ -39,10 +39,31 @@ describe("world-space label layout", () => {
     semanticOnlyLabel.userData.labelRole = "connection";
 
     scene.add(groupLabel, routeLabel, semanticOnlyLabel);
-    separateWorldSpaceConnectionLabels(scene);
+    layoutWorldSpaceLabels(scene);
 
     expect(Math.abs(routeLabel.position.x)).toBeGreaterThan(0.5);
     expect(routeLabel.position.z).toBe(0);
     expect(semanticOnlyLabel.position.toArray()).toEqual([0, 0, 0]);
+  });
+
+  it("places Node labels before Connection captions and resets their authored origin", () => {
+    const scene = new Group();
+    const groupLabel = label("group", 1.5, 0.6);
+    const nodeLabel = label("node", 1.5, 0.4);
+    const connectionLabel = label("connection", 1.5, 0.4);
+
+    nodeLabel.userData.labelOrigin = { x: 0, z: 0 };
+    nodeLabel.userData.labelShiftAxis = "z";
+    connectionLabel.userData.labelOrigin = { x: 0, z: 0 };
+    connectionLabel.userData.labelShiftAxis = "z";
+    nodeLabel.position.z = 20;
+    connectionLabel.position.z = 20;
+
+    scene.add(groupLabel, nodeLabel, connectionLabel);
+    layoutWorldSpaceLabels(scene);
+
+    expect(Math.abs(nodeLabel.position.z)).toBeLessThan(5);
+    expect(Math.abs(connectionLabel.position.z)).toBeLessThan(5);
+    expect(nodeLabel.position.z).not.toBe(connectionLabel.position.z);
   });
 });

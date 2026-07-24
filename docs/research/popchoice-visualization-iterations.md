@@ -156,13 +156,36 @@ What this tests:
 - Whether the same caption placement remains useful in isometric and top cameras.
 - Whether Node names should remain the final screen-space typography layer.
 
+### 8. Embed Node names into the scene
+
+What changed:
+
+- Node names now render as transparent world-space text planes beside their models.
+- Node typography stays the primary high-contrast sans-serif role; Group and Connection typography keep their existing structural and routing roles.
+- Node labels enter collision layout before Connection captions, so route details yield to entity identity.
+- Authored label origins are restored before each layout pass, preventing progressive drift while assets resolve.
+- Node labels scale down slightly toward Top while remaining larger than Connection captions.
+- Semantic Node text remains in the visually hidden HTML overlay.
+
+What worked:
+
+- The graph now reads as one spatial composition instead of a 3D scene with a floating DOM annotation layer.
+- Camera motion preserves the relationship between a model and its name.
+- The role hierarchy remains visible without introducing new schema fields.
+
+What did not carry forward:
+
+- Screen-space Node labels were crisp and stable, but they visually detached from the diagram during camera motion.
+- Treating Node labels as fixed collision obstacles made dense views brittle, so they receive deterministic placement before lower-priority Connection captions.
+
 ## Current decisions
 
 - The default PopChoice preset is `Recommendation`.
 - `Operations` is a second view, not an expanded default.
 - Both views derive from shared host-side templates and retain stable semantic IDs.
 - Layout, grouping, visible labels, and Opening View belong to a preset view.
-- Group names and Connection captions use world-space typography; Node labels remain screen-space.
+- Group names, Node names, and Connection captions use world-space typography.
+- The HTML overlay is semantic-only for all label types.
 - The public API continues to accept one concrete `Visualization`.
 - A public Source Graph or View abstraction remains deferred until more real projects validate the pattern.
 - Realtime collaboration, version history, free camera, and editor work remain outside this prototype.

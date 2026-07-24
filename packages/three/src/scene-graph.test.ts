@@ -10,12 +10,13 @@ import {
 } from "three";
 import { describe, expect, it } from "vitest";
 
-import type { BasicConnectionRoute, Group } from "@under-glass/core";
+import type { BasicConnectionRoute, Group, Node } from "@under-glass/core";
 
 import {
   createConnectionRoute,
   createGroupSurface,
   createInfiniteGrid,
+  createNodeLabel,
   DEFAULT_SCENE_THEME,
   updateInfiniteGrid,
 } from "./scene-graph.js";
@@ -114,6 +115,22 @@ describe("project graph presentation", () => {
     expect(
       ((border as LineLoop).material as LineBasicMaterial).color.getHex(),
     ).toBe(DEFAULT_SCENE_THEME.groupBorder);
+  });
+
+  it("marks Node names for world-space rendering", () => {
+    const node: Node = {
+      assetId: "service",
+      id: "api",
+      label: "API",
+      position: { x: 2, z: 3 },
+      quarterTurns: 0,
+    };
+    const presentation = createNodeLabel(node);
+
+    expect(presentation.userData.nodeLabel).toEqual({
+      rendering: "world-space",
+      text: "API",
+    });
   });
 
   it("maps host-defined Group Style Keys to distinct quiet regions", () => {

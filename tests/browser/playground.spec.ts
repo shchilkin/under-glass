@@ -222,6 +222,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
   await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
     RECOMMENDATION_NODE_COUNT,
   );
+  await expect(
+    page.locator('[data-under-glass-label="node"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
   await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(3);
   await expect(
     page.locator('[data-under-glass-label="group"]').first(),
@@ -237,7 +240,7 @@ test("renders the focused PopChoice views and both camera modes", async ({
   ).toHaveCount(0);
   await expect(
     page.locator('[data-under-glass-label="node"]', { hasText: "Web" }),
-  ).toBeVisible();
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
 
   const scene = page.getByLabel("Under Glass 3D scene");
   const recommendation = page.getByRole("button", {
@@ -285,6 +288,9 @@ test("renders the focused PopChoice views and both camera modes", async ({
   await expect(page.getByTestId("group-count")).toHaveText("5");
   await expect(page.getByTestId("asset-resolve-count")).toHaveText("8");
   await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(11);
+  await expect(
+    page.locator('[data-under-glass-label="node"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
   await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(5);
   await expect(
     page.locator('[data-under-glass-label="group"]').first(),

@@ -63,10 +63,11 @@ import {
   createConnectionRoute,
   createGroupSurface,
   createInfiniteGrid,
+  createNodeLabel,
   updateInfiniteGrid,
 } from "./scene-graph.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
-import { separateWorldSpaceConnectionLabels } from "./world-label-layout.js";
+import { layoutWorldSpaceLabels } from "./world-label-layout.js";
 import type {
   CameraMotion,
   CreateSceneRendererOptions,
@@ -147,10 +148,13 @@ function removeAssetPlaceholder(
 
 function renderSurface(surface: RenderingSurface): void {
   const connectionLabelScale = 1 - surface.cameraProgress * 0.4;
+  const nodeLabelScale = 1 - surface.cameraProgress * 0.32;
 
-  surface.connectionLayer.traverse((object) => {
+  surface.scene.traverse((object) => {
     if (object.userData.labelRole === "connection") {
       object.scale.setScalar(connectionLabelScale);
+    } else if (object.userData.labelRole === "node") {
+      object.scale.setScalar(nodeLabelScale);
     }
   });
   surface.webGlRenderer.render(surface.scene, surface.camera);
@@ -344,6 +348,13 @@ function createRenderingSurface(
     scene.add(createGroupSurface(group));
   }
 
+  const nodeLabelLayer = new Group();
+  nodeLabelLayer.name = "Node Labels";
+  for (const node of visualization.nodes) {
+    nodeLabelLayer.add(createNodeLabel(node));
+  }
+  scene.add(nodeLabelLayer);
+
   connectionLayer.name = "Connections";
   scene.add(connectionLayer);
 
@@ -420,7 +431,7 @@ function updateGraphPresentation(
     surface.connectionLayer.add(createConnectionRoute(route));
   }
 
-  separateWorldSpaceConnectionLabels(surface.scene);
+  layoutWorldSpaceLabels(surface.scene);
   surface.labels.setRoutes(session.routes);
   updateGroundPlane(
     surface.groundPlane,
