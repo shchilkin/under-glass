@@ -1,5 +1,9 @@
 import { parseVisualization, type OpeningView } from "@under-glass/core";
-import { createViewerController, type ViewerSnapshot } from "@under-glass/web";
+import {
+  createViewerController,
+  type ViewerAccessibility,
+  type ViewerSnapshot,
+} from "@under-glass/web";
 import { resolveDemoAsset } from "@under-glass/test-fixtures";
 
 import visualizationDocument from "./visualization.json" with { type: "json" };
@@ -34,8 +38,22 @@ const cameraButtons = [
   ...document.querySelectorAll<HTMLButtonElement>("[data-camera-mode]"),
 ];
 const visualization = parseVisualization(visualizationDocument);
+const accessibleLabels: Readonly<Record<string, string>> = {
+  "connection:browser-service": "Browser request",
+  "connection:service-database": "Project data query",
+  "group:runtime": "Application runtime",
+  "node:browser": "Web browser",
+  "node:database": "Project database",
+  "node:service": "Recommendation service",
+};
+const accessibility: ViewerAccessibility = {
+  resolveEntityLabel: ({ id, kind }) =>
+    accessibleLabels[`${kind}:${id}`] ?? `${kind} ${id}`,
+  sceneLabel: "Vanilla recommendation architecture",
+};
 const statusHistory: ViewerSnapshot["status"][] = [];
 const controller = createViewerController({
+  accessibility,
   cameraMotion: "responsive",
   container: viewerElement,
   resolveAsset: resolveDemoAsset,
@@ -77,11 +95,9 @@ for (const button of cameraButtons) {
 const unsubscribe = controller.subscribe(renderSnapshot);
 renderSnapshot();
 
-window.addEventListener(
-  "beforeunload",
-  () => {
-    unsubscribe();
-    controller.dispose();
-  },
-  { once: true },
-);
+const disposeViewer = (): void => {
+  unsubscribe();
+  controller.dispose();
+};
+
+window.addEventListener("pagehide", disposeViewer, { once: true });

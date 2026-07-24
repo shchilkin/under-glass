@@ -13,6 +13,9 @@ export default defineConfig({
       "@under-glass/three": fileURLToPath(
         new URL("../../packages/three/src/index.ts", import.meta.url),
       ),
+      "@under-glass/web": fileURLToPath(
+        new URL("../../packages/web/src/index.ts", import.meta.url),
+      ),
       "@under-glass/test-fixtures": fileURLToPath(
         new URL("../../packages/test-fixtures/src/index.ts", import.meta.url),
       ),
