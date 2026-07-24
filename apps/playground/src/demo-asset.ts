@@ -159,25 +159,38 @@ export function markDemoGlbAsCompressed(bytes: ArrayBuffer): ArrayBuffer {
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function applyVariantMaterialColor(
+  materials: unknown,
+  color: DemoAssetVariant["color"],
+): void {
+  if (!Array.isArray(materials)) {
+    return;
+  }
+
+  const firstMaterial = materials[0];
+
+  if (!isRecord(firstMaterial)) {
+    return;
+  }
+
+  const pbr = firstMaterial.pbrMetallicRoughness;
+
+  if (!isRecord(pbr)) {
+    return;
+  }
+
+  pbr.baseColorFactor = color;
+}
+
 function createVariantGlb(variant: DemoAssetVariant): ArrayBuffer {
   return rewriteDemoGlb(decodeBase64(DEMO_GLB_BASE64), (gltf) => {
     gltf.nodes = variant.nodes;
     gltf.scenes = [{ nodes: variant.nodes.map((_node, index) => index) }];
-
-    const materials = gltf.materials;
-
-    if (Array.isArray(materials)) {
-      const firstMaterial = materials[0];
-
-      if (typeof firstMaterial === "object" && firstMaterial !== null) {
-        const pbr = (firstMaterial as Record<string, unknown>)
-          .pbrMetallicRoughness;
-
-        if (typeof pbr === "object" && pbr !== null) {
-          (pbr as Record<string, unknown>).baseColorFactor = variant.color;
-        }
-      }
-    }
+    applyVariantMaterialColor(gltf.materials, variant.color);
   });
 }
 

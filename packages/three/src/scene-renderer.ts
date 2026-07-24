@@ -71,6 +71,7 @@ import type {
   CreateSceneRendererOptions,
   SceneRenderer,
   SceneRendererDiagnostic,
+  SetCameraModeOptions,
 } from "./types.js";
 
 interface RenderingSurface {
@@ -634,6 +635,62 @@ async function loadNodes(
   }
 }
 
+function applyRecoverableDiagnostics(
+  diagnostics: readonly SceneRendererDiagnostic[],
+  store: SceneStateStore,
+): void {
+  const recoverableDiagnostics = diagnosticsWithSeverity(
+    diagnostics,
+    "warning",
+  );
+
+  if (recoverableDiagnostics.length === 0) {
+    return;
+  }
+
+  store.setSnapshot({
+    diagnostics: recoverableDiagnostics,
+    status: "loading",
+  });
+}
+
+function initializeSceneRendering(
+  options: CreateSceneRendererOptions,
+  store: SceneStateStore,
+  session: RendererSession,
+  diagnostics: readonly SceneRendererDiagnostic[],
+): RenderingSurface {
+  const surface = createRenderingSurface(
+    options.container,
+    options.visualization,
+    options.cameraMotion ?? "responsive",
+  );
+
+  applyRecoverableDiagnostics(diagnostics, store);
+  addAssetPlaceholders(options.visualization.nodes, surface, session);
+  updateGraphPresentation(options.visualization, surface, session);
+  void loadNodes(options.visualization.nodes, options, surface, store, session);
+  return surface;
+}
+
+function startValidSceneRendering(
+  options: CreateSceneRendererOptions,
+  store: SceneStateStore,
+  session: RendererSession,
+  diagnostics: readonly SceneRendererDiagnostic[],
+): RenderingSurface | null {
+  try {
+    return initializeSceneRendering(options, store, session, diagnostics);
+  } catch (error) {
+    deferFailedLifecycle(
+      store,
+      [rendererUnavailableDiagnostic(error)],
+      () => session.disposed,
+    );
+    return null;
+  }
+}
+
 function startSceneRendering(
   options: CreateSceneRendererOptions,
   store: SceneStateStore,
@@ -647,42 +704,7 @@ function startSceneRendering(
     return null;
   }
 
-  try {
-    const surface = createRenderingSurface(
-      options.container,
-      options.visualization,
-      options.cameraMotion ?? "responsive",
-    );
-    const recoverableDiagnostics = diagnosticsWithSeverity(
-      diagnostics,
-      "warning",
-    );
-
-    if (recoverableDiagnostics.length > 0) {
-      store.setSnapshot({
-        diagnostics: recoverableDiagnostics,
-        status: "loading",
-      });
-    }
-
-    addAssetPlaceholders(options.visualization.nodes, surface, session);
-    updateGraphPresentation(options.visualization, surface, session);
-    void loadNodes(
-      options.visualization.nodes,
-      options,
-      surface,
-      store,
-      session,
-    );
-    return surface;
-  } catch (error) {
-    deferFailedLifecycle(
-      store,
-      [rendererUnavailableDiagnostic(error)],
-      () => session.disposed,
-    );
-    return null;
-  }
+  return startValidSceneRendering(options, store, session, diagnostics);
 }
 
 function disposeRendererSession(
@@ -699,6 +721,54 @@ function disposeRendererSession(
   if (session.surface !== null) {
     disposeSurface(session.surface, session.assets.disposalRoots());
   }
+}
+
+function activeRenderingSurface(
+  session: RendererSession,
+): RenderingSurface | null {
+  if (session.disposed) {
+    return null;
+  }
+
+  return session.surface;
+}
+
+function shouldApplyCameraModeImmediately(
+  surface: RenderingSurface,
+  options: SetCameraModeOptions | undefined,
+): boolean {
+  return options?.transition === "immediate" || surface.reducedMotion.matches;
+}
+
+function updateCameraMode(
+  surface: RenderingSurface,
+  cameraMode: CameraMode,
+  options: SetCameraModeOptions | undefined,
+): void {
+  if (shouldApplyCameraModeImmediately(surface, options)) {
+    finishCameraModeImmediately(surface, cameraMode);
+    return;
+  }
+
+  if (surface.cameraMode === cameraMode) {
+    return;
+  }
+
+  startCameraModeTransition(surface, cameraMode);
+}
+
+function setSessionCameraMode(
+  session: RendererSession,
+  cameraMode: CameraMode,
+  options: SetCameraModeOptions | undefined,
+): void {
+  const surface = activeRenderingSurface(session);
+
+  if (surface === null) {
+    return;
+  }
+
+  updateCameraMode(surface, cameraMode, options);
 }
 
 function createSceneRendererHandle(
@@ -721,25 +791,7 @@ function createSceneRendererHandle(
       surface.container.dataset.underGlassCameraMotion = cameraMotion;
     },
     setCameraMode(cameraMode: CameraMode, options): void {
-      const surface = session.surface;
-
-      if (session.disposed || surface === null) {
-        return;
-      }
-
-      const shouldApplyImmediately =
-        options?.transition === "immediate" || surface.reducedMotion.matches;
-
-      if (shouldApplyImmediately) {
-        finishCameraModeImmediately(surface, cameraMode);
-        return;
-      }
-
-      if (surface.cameraMode === cameraMode) {
-        return;
-      }
-
-      startCameraModeTransition(surface, cameraMode);
+      setSessionCameraMode(session, cameraMode, options);
     },
     subscribe: store.subscribe,
   };

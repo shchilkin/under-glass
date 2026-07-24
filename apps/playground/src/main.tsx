@@ -256,6 +256,142 @@ function appendStatus(
   return history.at(-1) === status ? history : [...history, status];
 }
 
+function presentationForScenario(currentScenario: string): {
+  readonly className: string;
+  readonly lede: string;
+} {
+  return currentScenario === "graph"
+    ? {
+        className: "app app--graph",
+        lede: "A host-resolved project system crossing the public renderer boundary.",
+      }
+    : {
+        className: "app",
+        lede: "A host-resolved GLB crossing the public renderer boundary.",
+      };
+}
+
+interface SceneControlsProps {
+  readonly cameraMode: OpeningView["cameraMode"];
+  readonly cameraMotion: CameraMotion;
+  readonly onCameraModeChange: (cameraMode: OpeningView["cameraMode"]) => void;
+  readonly onCameraMotionChange: (cameraMotion: CameraMotion) => void;
+}
+
+function SceneControls({
+  cameraMode,
+  cameraMotion,
+  onCameraModeChange,
+  onCameraMotionChange,
+}: SceneControlsProps) {
+  return (
+    <div className="scene-controls">
+      <div className="motion-lab">
+        <span className="control-label">Camera motion</span>
+        <div aria-label="Camera motion profile" className="motion-profile">
+          {CAMERA_MOTIONS.map((motion) => (
+            <button
+              aria-label={CAMERA_MOTION_COPY[motion].label}
+              aria-pressed={cameraMotion === motion}
+              key={motion}
+              onClick={() => onCameraMotionChange(motion)}
+              type="button"
+            >
+              {CAMERA_MOTION_COPY[motion].label}
+            </button>
+          ))}
+        </div>
+        <span className="motion-description">
+          {CAMERA_MOTION_COPY[cameraMotion].description}
+        </span>
+      </div>
+      <div aria-label="Camera mode" className="camera-mode">
+        <button
+          aria-pressed={cameraMode === "isometric"}
+          onClick={() => onCameraModeChange("isometric")}
+          type="button"
+        >
+          Isometric
+        </button>
+        <button
+          aria-pressed={cameraMode === "top"}
+          onClick={() => onCameraModeChange("top")}
+          type="button"
+        >
+          Top
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface SceneMetricsProps {
+  readonly assetResolveCount: number;
+  readonly statusHistory: readonly SceneRendererStatus[];
+}
+
+function SceneMetrics({ assetResolveCount, statusHistory }: SceneMetricsProps) {
+  const assetId = demoVisualization.nodes.at(0)?.assetId;
+  const lifecycle = statusHistory.join(" → ") || "Starting";
+
+  return (
+    <dl>
+      <div>
+        <dt>Schema</dt>
+        <dd>v{demoVisualization.schemaVersion}</dd>
+      </div>
+      <div>
+        <dt>Asset</dt>
+        <dd>{assetId}</dd>
+      </div>
+      <div>
+        <dt>Nodes</dt>
+        <dd data-testid="node-count">{demoVisualization.nodes.length}</dd>
+      </div>
+      <div>
+        <dt>Connections</dt>
+        <dd data-testid="connection-count">
+          {demoVisualization.connections.length}
+        </dd>
+      </div>
+      <div>
+        <dt>Groups</dt>
+        <dd data-testid="group-count">{demoVisualization.groups.length}</dd>
+      </div>
+      <div>
+        <dt>Asset resolves</dt>
+        <dd data-testid="asset-resolve-count">{assetResolveCount}</dd>
+      </div>
+      <div>
+        <dt>Lifecycle</dt>
+        <dd>{lifecycle}</dd>
+      </div>
+    </dl>
+  );
+}
+
+interface RendererDiagnosticsProps {
+  readonly diagnostics: SceneRendererSnapshot["diagnostics"];
+}
+
+function RendererDiagnostics({ diagnostics }: RendererDiagnosticsProps) {
+  if (diagnostics.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul aria-label="Renderer diagnostics">
+      {diagnostics.map((diagnostic) => (
+        <li key={`${diagnostic.code}:${diagnostic.entityId ?? "scene"}`}>
+          <code>{diagnostic.code}</code>
+          <span data-testid="diagnostic-severity">{diagnostic.severity}</span>
+          <span>{diagnostic.message}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function App() {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<SceneRenderer | null>(null);
@@ -321,103 +457,29 @@ function App() {
     );
     setCameraMotion(motion);
   };
+  const presentation = presentationForScenario(scenario);
 
   return (
-    <main className={scenario === "graph" ? "app app--graph" : "app"}>
+    <main className={presentation.className}>
       <p className="eyebrow">Open-source project visualization</p>
       <h1>Under Glass</h1>
-      <p className="lede">
-        {scenario === "graph"
-          ? "A host-resolved project system crossing the public renderer boundary."
-          : "A host-resolved GLB crossing the public renderer boundary."}
-      </p>
-      <div className="scene-controls">
-        <div className="motion-lab">
-          <span className="control-label">Camera motion</span>
-          <div aria-label="Camera motion profile" className="motion-profile">
-            {CAMERA_MOTIONS.map((motion) => (
-              <button
-                aria-label={CAMERA_MOTION_COPY[motion].label}
-                aria-pressed={cameraMotion === motion}
-                key={motion}
-                onClick={() => selectCameraMotion(motion)}
-                type="button"
-              >
-                {CAMERA_MOTION_COPY[motion].label}
-              </button>
-            ))}
-          </div>
-          <span className="motion-description">
-            {CAMERA_MOTION_COPY[cameraMotion].description}
-          </span>
-        </div>
-        <div aria-label="Camera mode" className="camera-mode">
-          <button
-            aria-pressed={cameraMode === "isometric"}
-            onClick={() => setCameraMode("isometric")}
-            type="button"
-          >
-            Isometric
-          </button>
-          <button
-            aria-pressed={cameraMode === "top"}
-            onClick={() => setCameraMode("top")}
-            type="button"
-          >
-            Top
-          </button>
-        </div>
-      </div>
+      <p className="lede">{presentation.lede}</p>
+      <SceneControls
+        cameraMode={cameraMode}
+        cameraMotion={cameraMotion}
+        onCameraModeChange={setCameraMode}
+        onCameraMotionChange={selectCameraMotion}
+      />
       <div
         aria-label="Under Glass 3D scene"
         className="scene"
         ref={sceneContainerRef}
       />
-      <dl>
-        <div>
-          <dt>Schema</dt>
-          <dd>v{demoVisualization.schemaVersion}</dd>
-        </div>
-        <div>
-          <dt>Asset</dt>
-          <dd>{demoVisualization.nodes[0]?.assetId}</dd>
-        </div>
-        <div>
-          <dt>Nodes</dt>
-          <dd data-testid="node-count">{demoVisualization.nodes.length}</dd>
-        </div>
-        <div>
-          <dt>Connections</dt>
-          <dd data-testid="connection-count">
-            {demoVisualization.connections.length}
-          </dd>
-        </div>
-        <div>
-          <dt>Groups</dt>
-          <dd data-testid="group-count">{demoVisualization.groups.length}</dd>
-        </div>
-        <div>
-          <dt>Asset resolves</dt>
-          <dd data-testid="asset-resolve-count">{assetResolveCount}</dd>
-        </div>
-        <div>
-          <dt>Lifecycle</dt>
-          <dd>{statusHistory.join(" → ") || "Starting"}</dd>
-        </div>
-      </dl>
-      {snapshot.diagnostics.length > 0 ? (
-        <ul aria-label="Renderer diagnostics">
-          {snapshot.diagnostics.map((diagnostic) => (
-            <li key={`${diagnostic.code}:${diagnostic.entityId ?? "scene"}`}>
-              <code>{diagnostic.code}</code>
-              <span data-testid="diagnostic-severity">
-                {diagnostic.severity}
-              </span>
-              <span>{diagnostic.message}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <SceneMetrics
+        assetResolveCount={assetResolveCount}
+        statusHistory={statusHistory}
+      />
+      <RendererDiagnostics diagnostics={snapshot.diagnostics} />
     </main>
   );
 }

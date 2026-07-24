@@ -70,13 +70,8 @@ function routeLabelPoint(route: BasicConnectionRoute): Vector3 {
   return new Vector3(point.x, 0.24, point.z);
 }
 
-export function createLabelOverlay(
-  container: HTMLElement,
-  visualization: Visualization,
-): LabelOverlay {
+function createOverlayLayer(container: HTMLElement): HTMLDivElement {
   const layer = document.createElement("div");
-  const labels: ProjectedLabel[] = [];
-  let routeLabels: ProjectedLabel[] = [];
 
   if (getComputedStyle(container).position === "static") {
     container.style.position = "relative";
@@ -90,65 +85,114 @@ export function createLabelOverlay(
   layer.style.pointerEvents = "none";
   layer.style.zIndex = "2";
   container.append(layer);
+  return layer;
+}
 
-  for (const node of visualization.nodes) {
-    labels.push(
-      createLabel(
-        layer,
-        node.label,
-        "node",
-        new Vector3(node.position.x, 0.15, node.position.z + 0.8),
-      ),
-    );
+function createVisualizationLabels(
+  layer: HTMLDivElement,
+  visualization: Visualization,
+): ProjectedLabel[] {
+  const nodeLabels = visualization.nodes.map((node) =>
+    createLabel(
+      layer,
+      node.label,
+      "node",
+      new Vector3(node.position.x, 0.15, node.position.z + 0.8),
+    ),
+  );
+  const groupLabels = visualization.groups.map((group) =>
+    createLabel(
+      layer,
+      group.label ?? group.id,
+      "group",
+      new Vector3(group.bounds.minX + 0.35, 0.08, group.bounds.minZ + 0.35),
+    ),
+  );
+  return [...nodeLabels, ...groupLabels];
+}
+
+function labelAnchor(type: ProjectedLabel["type"]): string {
+  return type === "group" ? "translate(0, -50%)" : "translate(-50%, -50%)";
+}
+
+function isLabelOutsideViewport(
+  projected: Vector3,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): boolean {
+  return [
+    projected.z < -1,
+    projected.z > 1,
+    x < -100,
+    x > width + 100,
+    y < -50,
+    y > height + 50,
+  ].some(Boolean);
+}
+
+function renderProjectedLabel(
+  label: ProjectedLabel,
+  camera: OrthographicCamera,
+  width: number,
+  height: number,
+): void {
+  const projected = label.point.clone().project(camera);
+  const x = (projected.x * 0.5 + 0.5) * width;
+  const y = (-projected.y * 0.5 + 0.5) * height;
+  label.element.style.transform = `translate3d(${x}px, ${y}px, 0) ${labelAnchor(label.type)}`;
+  label.element.hidden = isLabelOutsideViewport(projected, x, y, width, height);
+}
+
+function renderLabels(
+  labels: readonly ProjectedLabel[],
+  camera: OrthographicCamera,
+  container: HTMLElement,
+): void {
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+
+  for (const label of labels) {
+    renderProjectedLabel(label, camera, width, height);
   }
+}
 
-  for (const group of visualization.groups) {
-    labels.push(
-      createLabel(
-        layer,
-        group.label ?? group.id,
-        "group",
-        new Vector3(group.bounds.minX + 0.35, 0.08, group.bounds.minZ + 0.35),
-      ),
-    );
+function removeLabels(labels: readonly ProjectedLabel[]): void {
+  for (const label of labels) {
+    label.element.remove();
   }
+}
 
-  const render = (camera: OrthographicCamera): void => {
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+function createRouteLabels(
+  layer: HTMLDivElement,
+  routes: readonly BasicConnectionRoute[],
+): ProjectedLabel[] {
+  return routes
+    .filter((route) => route.label.length > 0)
+    .map((route) =>
+      createLabel(layer, route.label, "connection", routeLabelPoint(route)),
+    );
+}
 
-    for (const label of [...labels, ...routeLabels]) {
-      const projected = label.point.clone().project(camera);
-      const x = (projected.x * 0.5 + 0.5) * width;
-      const y = (-projected.y * 0.5 + 0.5) * height;
-      const anchor =
-        label.type === "group" ? "translate(0, -50%)" : "translate(-50%, -50%)";
-      label.element.style.transform = `translate3d(${x}px, ${y}px, 0) ${anchor}`;
-      label.element.hidden =
-        projected.z < -1 ||
-        projected.z > 1 ||
-        x < -100 ||
-        x > width + 100 ||
-        y < -50 ||
-        y > height + 50;
-    }
-  };
+export function createLabelOverlay(
+  container: HTMLElement,
+  visualization: Visualization,
+): LabelOverlay {
+  const layer = createOverlayLayer(container);
+  const labels = createVisualizationLabels(layer, visualization);
+  let routeLabels: ProjectedLabel[] = [];
 
   return {
     dispose(): void {
       layer.remove();
     },
-    render,
+    render(camera: OrthographicCamera): void {
+      renderLabels([...labels, ...routeLabels], camera, container);
+    },
     setRoutes(routes: readonly BasicConnectionRoute[]): void {
-      for (const label of routeLabels) {
-        label.element.remove();
-      }
-
-      routeLabels = routes
-        .filter((route) => route.label.length > 0)
-        .map((route) =>
-          createLabel(layer, route.label, "connection", routeLabelPoint(route)),
-        );
+      removeLabels(routeLabels);
+      routeLabels = createRouteLabels(layer, routes);
     },
   };
 }
