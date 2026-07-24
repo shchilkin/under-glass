@@ -112,6 +112,44 @@ describe("project graph presentation", () => {
     ).toBe(DEFAULT_SCENE_THEME.groupBorder);
   });
 
+  it("maps host-defined Group Style Keys to distinct quiet regions", () => {
+    const group: Group = {
+      id: "data",
+      label: "Data",
+      bounds: { minX: -2, minZ: -1, maxX: 3, maxZ: 4 },
+      styleKey: "data",
+    };
+    const presentation = createGroupSurface(group);
+    const surface = meshNamed(presentation, "Group Surface");
+    const border = presentation.getObjectByName("Group Border") as LineLoop;
+
+    expect((surface.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupDataSurface,
+    );
+    expect((border.material as LineBasicMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupDataBorder,
+    );
+  });
+
+  it("falls back to the default Group treatment for unknown Style Keys", () => {
+    const group: Group = {
+      id: "future",
+      label: "Future",
+      bounds: { minX: -2, minZ: -1, maxX: 3, maxZ: 4 },
+      styleKey: "host-defined-but-unmapped",
+    };
+    const presentation = createGroupSurface(group);
+    const surface = meshNamed(presentation, "Group Surface");
+    const border = presentation.getObjectByName("Group Border") as LineLoop;
+
+    expect((surface.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupSurface,
+    );
+    expect((border.material as LineBasicMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupBorder,
+    );
+  });
+
   it("renders a one-way route with a forward arrow at the target", () => {
     const presentation = createConnectionRoute(route);
     const arrow = meshNamed(presentation, "Forward Arrow");

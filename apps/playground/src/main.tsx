@@ -17,7 +17,12 @@ import {
 } from "@under-glass/three";
 
 import { markDemoGlbAsCompressed, resolveDemoAsset } from "./demo-asset.js";
-import { POPCHOICE_VISUALIZATION } from "./popchoice-visualization.js";
+import {
+  DEFAULT_POPCHOICE_VIEW_ID,
+  POPCHOICE_VIEW_IDS,
+  POPCHOICE_VIEWS,
+  type PopChoiceViewId,
+} from "./popchoice-visualization.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
@@ -26,17 +31,36 @@ const scenario = searchParameters.get("scenario") ?? "graph";
 const showPopChoiceVisualization = scenario === "graph" && !showConnection;
 const CAMERA_MOTIONS: readonly CameraMotion[] = ["responsive", "spring"];
 const requestedCameraMotion = searchParameters.get("motion");
+const requestedPopChoiceView = searchParameters.get("view");
 const initialCameraMotion: CameraMotion =
   requestedCameraMotion !== null &&
   CAMERA_MOTIONS.includes(requestedCameraMotion as CameraMotion)
     ? (requestedCameraMotion as CameraMotion)
     : "responsive";
+const initialPopChoiceView: PopChoiceViewId =
+  requestedPopChoiceView !== null &&
+  POPCHOICE_VIEW_IDS.includes(requestedPopChoiceView as PopChoiceViewId)
+    ? (requestedPopChoiceView as PopChoiceViewId)
+    : DEFAULT_POPCHOICE_VIEW_ID;
 
 if (
   requestedCameraMotion !== null &&
   requestedCameraMotion !== initialCameraMotion
 ) {
   searchParameters.set("motion", initialCameraMotion);
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}?${searchParameters.toString()}${window.location.hash}`,
+  );
+}
+
+if (
+  showPopChoiceVisualization &&
+  requestedPopChoiceView !== null &&
+  requestedPopChoiceView !== initialPopChoiceView
+) {
+  searchParameters.set("view", initialPopChoiceView);
   window.history.replaceState(
     null,
     "",
@@ -214,10 +238,6 @@ async function resolvePlaygroundAsset(assetId: string): Promise<ResolvedAsset> {
 }
 
 function createDemoVisualization(): Visualization {
-  if (showPopChoiceVisualization) {
-    return POPCHOICE_VISUALIZATION;
-  }
-
   return parseVisualization({
     schemaVersion: 1,
     nodes: demoNodes,
@@ -243,7 +263,7 @@ function createDemoVisualization(): Visualization {
   });
 }
 
-const demoVisualization = createDemoVisualization();
+const fallbackVisualization = createDemoVisualization();
 
 const loadingSnapshot: SceneRendererSnapshot = {
   diagnostics: [],
@@ -257,19 +277,54 @@ function appendStatus(
   return history.at(-1) === status ? history : [...history, status];
 }
 
-function presentationForScenario(isPopChoiceVisualization: boolean): {
+function presentationForScenario(
+  isPopChoiceVisualization: boolean,
+  popChoiceDescription: string,
+): {
   readonly className: string;
   readonly lede: string;
 } {
   return isPopChoiceVisualization
     ? {
         className: "app app--graph",
-        lede: "Recommendation runtime · web, queues, workers, data and observability.",
+        lede: popChoiceDescription,
       }
     : {
         className: "app",
         lede: "A host-resolved GLB crossing the public renderer boundary.",
       };
+}
+
+interface ArchitectureViewSwitchProps {
+  readonly activeViewId: PopChoiceViewId;
+  readonly onViewChange: (viewId: PopChoiceViewId) => void;
+}
+
+function ArchitectureViewSwitch({
+  activeViewId,
+  onViewChange,
+}: ArchitectureViewSwitchProps) {
+  return (
+    <div className="view-switch">
+      <span className="control-label">Architecture view</span>
+      <div aria-label="Architecture view" className="view-options">
+        {POPCHOICE_VIEW_IDS.map((viewId) => {
+          const view = POPCHOICE_VIEWS[viewId];
+
+          return (
+            <button
+              aria-pressed={activeViewId === viewId}
+              key={viewId}
+              onClick={() => onViewChange(viewId)}
+              type="button"
+            >
+              <span>{view.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 interface SceneControlsProps {
@@ -331,6 +386,7 @@ interface SceneMetricsProps {
   readonly subjectLabel: string;
   readonly subjectValue: string | undefined;
   readonly statusHistory: readonly SceneRendererStatus[];
+  readonly visualization: Visualization;
 }
 
 function SceneMetrics({
@@ -338,6 +394,7 @@ function SceneMetrics({
   subjectLabel,
   subjectValue,
   statusHistory,
+  visualization,
 }: SceneMetricsProps) {
   const lifecycle = statusHistory.join(" → ") || "Starting";
 
@@ -345,7 +402,7 @@ function SceneMetrics({
     <dl>
       <div>
         <dt>Schema</dt>
-        <dd>v{demoVisualization.schemaVersion}</dd>
+        <dd>v{visualization.schemaVersion}</dd>
       </div>
       <div>
         <dt>{subjectLabel}</dt>
@@ -353,17 +410,17 @@ function SceneMetrics({
       </div>
       <div>
         <dt>Nodes</dt>
-        <dd data-testid="node-count">{demoVisualization.nodes.length}</dd>
+        <dd data-testid="node-count">{visualization.nodes.length}</dd>
       </div>
       <div>
         <dt>Connections</dt>
         <dd data-testid="connection-count">
-          {demoVisualization.connections.length}
+          {visualization.connections.length}
         </dd>
       </div>
       <div>
         <dt>Groups</dt>
-        <dd data-testid="group-count">{demoVisualization.groups.length}</dd>
+        <dd data-testid="group-count">{visualization.groups.length}</dd>
       </div>
       <div>
         <dt>Asset resolves</dt>
@@ -377,17 +434,21 @@ function SceneMetrics({
   );
 }
 
-function sceneMetricSubject(isPopChoiceVisualization: boolean): {
+function sceneMetricSubject(
+  isPopChoiceVisualization: boolean,
+  viewLabel: string,
+  visualization: Visualization,
+): {
   readonly label: string;
   readonly value: string | undefined;
 } {
   if (isPopChoiceVisualization) {
-    return { label: "Visualization", value: "PopChoice" };
+    return { label: "View", value: viewLabel };
   }
 
   return {
     label: "Asset",
-    value: demoVisualization.nodes.at(0)?.assetId,
+    value: visualization.nodes.at(0)?.assetId,
   };
 }
 
@@ -418,8 +479,14 @@ function App() {
   const rendererRef = useRef<SceneRenderer | null>(null);
   const [snapshot, setSnapshot] =
     useState<SceneRendererSnapshot>(loadingSnapshot);
+  const [popChoiceViewId, setPopChoiceViewId] =
+    useState<PopChoiceViewId>(initialPopChoiceView);
+  const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
+  const visualization = showPopChoiceVisualization
+    ? activePopChoiceView.visualization
+    : fallbackVisualization;
   const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
-    demoVisualization.openingView.cameraMode,
+    visualization.openingView.cameraMode,
   );
   const [cameraMotion, setCameraMotion] =
     useState<CameraMotion>(initialCameraMotion);
@@ -433,14 +500,18 @@ function App() {
       return;
     }
 
+    setSnapshot(loadingSnapshot);
+    setStatusHistory([]);
+    setAssetResolveCount(0);
+
     const renderer = createSceneRenderer({
-      cameraMotion: initialCameraMotion,
+      cameraMotion,
       container,
       resolveAsset: async (assetId) => {
         setAssetResolveCount((count) => count + 1);
         return resolvePlaygroundAsset(assetId);
       },
-      visualization: demoVisualization,
+      visualization,
     });
     rendererRef.current = renderer;
     const updateSnapshot = () => {
@@ -457,7 +528,7 @@ function App() {
       unsubscribe();
       renderer.dispose();
     };
-  }, []);
+  }, [visualization]);
 
   useEffect(() => {
     rendererRef.current?.setCameraMode(cameraMode);
@@ -478,8 +549,28 @@ function App() {
     );
     setCameraMotion(motion);
   };
-  const presentation = presentationForScenario(showPopChoiceVisualization);
-  const metricSubject = sceneMetricSubject(showPopChoiceVisualization);
+  const selectPopChoiceView = (viewId: PopChoiceViewId): void => {
+    const nextView = POPCHOICE_VIEWS[viewId];
+    const nextSearchParameters = new URLSearchParams(window.location.search);
+
+    nextSearchParameters.set("view", viewId);
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}?${nextSearchParameters.toString()}${window.location.hash}`,
+    );
+    setCameraMode(nextView.visualization.openingView.cameraMode);
+    setPopChoiceViewId(viewId);
+  };
+  const presentation = presentationForScenario(
+    showPopChoiceVisualization,
+    activePopChoiceView.description,
+  );
+  const metricSubject = sceneMetricSubject(
+    showPopChoiceVisualization,
+    activePopChoiceView.label,
+    visualization,
+  );
 
   return (
     <main className={presentation.className}>
@@ -500,17 +591,26 @@ function App() {
           onCameraMotionChange={selectCameraMotion}
         />
       </header>
-      <div
-        aria-label="Under Glass 3D scene"
-        className="scene"
-        ref={sceneContainerRef}
-      />
+      <div className="scene-stage">
+        {showPopChoiceVisualization ? (
+          <ArchitectureViewSwitch
+            activeViewId={popChoiceViewId}
+            onViewChange={selectPopChoiceView}
+          />
+        ) : null}
+        <div
+          aria-label="Under Glass 3D scene"
+          className="scene"
+          ref={sceneContainerRef}
+        />
+      </div>
       <aside className="scene-meta">
         <SceneMetrics
           assetResolveCount={assetResolveCount}
           statusHistory={statusHistory}
           subjectLabel={metricSubject.label}
           subjectValue={metricSubject.value}
+          visualization={visualization}
         />
       </aside>
       <RendererDiagnostics diagnostics={snapshot.diagnostics} />

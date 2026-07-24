@@ -45,12 +45,12 @@ function styleLabel(
     element.style.textShadow =
       "0 2px 4px rgb(0 0 0 / 95%), 0 5px 12px rgb(0 0 0 / 60%)";
   } else if (type === "group") {
-    element.style.color = "#69776f";
+    element.style.color = "#89978f";
     element.style.fontFamily =
       'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
-    element.style.fontSize = "11px";
+    element.style.fontSize = "13px";
     element.style.fontWeight = "700";
-    element.style.letterSpacing = "0.14em";
+    element.style.letterSpacing = "0.1em";
     element.style.textTransform = "uppercase";
   } else {
     element.style.padding = "2px 5px";
@@ -285,11 +285,7 @@ function createRouteLabels(
   routes: readonly BasicConnectionRoute[],
 ): ProjectedLabel[] {
   return routes
-    .filter(
-      (route) =>
-        route.label.length > 0 &&
-        (route.styleKey === undefined || route.styleKey === "primary"),
-    )
+    .filter((route) => route.label.length > 0)
     .map((route) =>
       createLabel(layer, route.label, "connection", [routeLabelPoint(route)]),
     );

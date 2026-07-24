@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { routeBasicConnections } from "@under-glass/core";
+import { routeBasicConnections, type Visualization } from "@under-glass/core";
 
-import { POPCHOICE_VISUALIZATION } from "./popchoice-visualization.js";
+import {
+  DEFAULT_POPCHOICE_VIEW_ID,
+  POPCHOICE_VIEW_IDS,
+  POPCHOICE_VIEWS,
+} from "./popchoice-visualization.js";
 
 const EXPECTED_NODE_IDS = [
   "backoffice",
@@ -19,147 +23,160 @@ const EXPECTED_NODE_IDS = [
   "workers",
 ] as const;
 
-const EXPECTED_CONNECTIONS = [
-  ["browser", "web", "HTTPS", "oneWay"],
-  ["web", "redis", "Enqueue", "oneWay"],
-  ["redis", "workers", "Jobs", "oneWay"],
-  ["workers", "postgres", "Persist", "oneWay"],
-  ["web", "postgres", "Query · results", "bidirectional"],
-  ["workers", "openai-api", "OpenAI inference", "oneWay"],
-  ["workers", "tmdb-api", "TMDB metadata", "oneWay"],
-  ["backoffice", "postgres", "Admin data", "bidirectional"],
-  ["backoffice", "redis", "Enqueue work", "bidirectional"],
-  ["bull-board", "redis", "Queue inspection", "oneWay"],
-  ["movie-discovery", "tmdb-api", "Discover movies", "oneWay"],
-  ["movie-discovery", "openai-api", "Embeddings", "oneWay"],
-  ["movie-discovery", "postgres", "Upsert catalog", "oneWay"],
-  ["web", "telemetry-stack", "Telemetry", "oneWay"],
-  ["workers", "telemetry-stack", "Telemetry", "oneWay"],
-  ["backoffice", "telemetry-stack", "Telemetry", "oneWay"],
-  ["telemetry-stack", "grafana", "Metrics · logs · traces", "oneWay"],
+const EXPECTED_CONNECTION_IDS = [
+  "backoffice-postgres",
+  "backoffice-redis",
+  "backoffice-telemetry",
+  "browser-web",
+  "bull-board-redis",
+  "movie-discovery-openai",
+  "movie-discovery-postgres",
+  "movie-discovery-tmdb",
+  "redis-workers",
+  "telemetry-grafana",
+  "web-postgres",
+  "web-redis",
+  "web-telemetry",
+  "workers-openai",
+  "workers-postgres",
+  "workers-telemetry",
+  "workers-tmdb",
 ] as const;
 
-describe("canonical PopChoice Visualization", () => {
-  it("contains the agreed production runtime without delivery infrastructure", () => {
-    expect(POPCHOICE_VISUALIZATION.nodes.map((node) => node.id).sort()).toEqual(
-      EXPECTED_NODE_IDS,
-    );
-    expect(
-      POPCHOICE_VISUALIZATION.nodes.map((node) => node.assetId).sort(),
-    ).toHaveLength(12);
-    expect(
-      new Set(POPCHOICE_VISUALIZATION.nodes.map((node) => node.assetId)).size,
-    ).toBeGreaterThanOrEqual(6);
-    expect(
-      POPCHOICE_VISUALIZATION.nodes.some((node) =>
-        /ci|docs|storybook|figma|backfill/i.test(node.label),
+function expectValidProjection(visualization: Visualization): void {
+  const nodeIds = new Set(visualization.nodes.map((node) => node.id));
+  const groupsById = new Map(
+    visualization.groups.map((group) => [group.id, group] as const),
+  );
+
+  for (const node of visualization.nodes) {
+    if (node.groupId === undefined) {
+      continue;
+    }
+
+    const group = groupsById.get(node.groupId);
+    expect(group).toBeDefined();
+    expect(node.position.x).toBeGreaterThanOrEqual(group!.bounds.minX);
+    expect(node.position.x).toBeLessThanOrEqual(group!.bounds.maxX);
+    expect(node.position.z).toBeGreaterThanOrEqual(group!.bounds.minZ);
+    expect(node.position.z).toBeLessThanOrEqual(group!.bounds.maxZ);
+  }
+
+  for (const connection of visualization.connections) {
+    expect(nodeIds.has(connection.source.nodeId)).toBe(true);
+    expect(nodeIds.has(connection.target.nodeId)).toBe(true);
+  }
+}
+
+describe("PopChoice preset views", () => {
+  it("projects one runtime model into two purpose-specific Visualizations", () => {
+    expect(DEFAULT_POPCHOICE_VIEW_ID).toBe("recommendation");
+    expect(POPCHOICE_VIEW_IDS).toEqual(["recommendation", "operations"]);
+
+    const projectedNodeIds = new Set(
+      POPCHOICE_VIEW_IDS.flatMap((id) =>
+        POPCHOICE_VIEWS[id].visualization.nodes.map((node) => node.id),
       ),
-    ).toBe(false);
-  });
-
-  it("keeps runtime and data concerns grouped while providers stay external", () => {
-    expect(
-      POPCHOICE_VISUALIZATION.groups.map(({ id, label }) => ({
-        id,
-        label,
-      })),
-    ).toEqual([
-      { id: "product-runtime", label: "Product Runtime" },
-      { id: "data-observability", label: "Data & Observability" },
-    ]);
-
-    const groupByNode = Object.fromEntries(
-      POPCHOICE_VISUALIZATION.nodes.map((node) => [
-        node.id,
-        node.groupId ?? null,
-      ]),
+    );
+    const projectedConnectionIds = new Set(
+      POPCHOICE_VIEW_IDS.flatMap((id) =>
+        POPCHOICE_VIEWS[id].visualization.connections.map(
+          (connection) => connection.id,
+        ),
+      ),
     );
 
-    expect(groupByNode).toMatchObject({
-      backoffice: "product-runtime",
-      browser: null,
-      "bull-board": "product-runtime",
-      grafana: "data-observability",
-      "movie-discovery": "product-runtime",
-      "openai-api": null,
-      postgres: "data-observability",
-      redis: "data-observability",
-      "telemetry-stack": "data-observability",
-      "tmdb-api": null,
-      web: "product-runtime",
-      workers: "product-runtime",
-    });
+    expect([...projectedNodeIds].sort()).toEqual(EXPECTED_NODE_IDS);
+    expect([...projectedConnectionIds].sort()).toEqual(EXPECTED_CONNECTION_IDS);
   });
 
-  it("makes the primary recommendation flow and supporting integrations explicit", () => {
-    expect(
-      POPCHOICE_VISUALIZATION.connections.map((connection) => [
-        connection.source.nodeId,
-        connection.target.nodeId,
-        connection.label,
-        connection.direction,
-      ]),
-    ).toEqual(EXPECTED_CONNECTIONS);
-    expect(
-      POPCHOICE_VISUALIZATION.connections
-        .filter((connection) => connection.styleKey === "telemetry")
-        .map((connection) => connection.id),
-    ).toEqual([
-      "web-telemetry",
-      "workers-telemetry",
-      "backoffice-telemetry",
-      "telemetry-grafana",
+  it("keeps the recommendation view focused on one request-to-result story", () => {
+    const view = POPCHOICE_VIEWS.recommendation;
+    const visualization = view.visualization;
+
+    expect(view.label).toBe("Recommendation");
+    expect(visualization.nodes.map((node) => node.id)).toEqual([
+      "browser",
+      "web",
+      "redis",
+      "workers",
+      "postgres",
+      "openai-api",
+      "tmdb-api",
     ]);
     expect(
-      POPCHOICE_VISUALIZATION.connections
-        .filter((connection) => connection.styleKey === "primary")
-        .map((connection) => connection.id),
+      visualization.connections.map((connection) => connection.id),
     ).toEqual([
       "browser-web",
       "web-redis",
       "redis-workers",
       "workers-postgres",
       "web-postgres",
+      "workers-openai",
+      "workers-tmdb",
     ]);
-    expect(
-      POPCHOICE_VISUALIZATION.connections
-        .filter((connection) => connection.styleKey === "supporting")
-        .map((connection) => connection.id),
-    ).toHaveLength(8);
-  });
-
-  it("opens on the whole system in an isometric view", () => {
-    expect(POPCHOICE_VISUALIZATION.openingView).toEqual({
+    expect(visualization.groups.map((group) => group.label)).toEqual([
+      "Recommendation Runtime",
+      "Data",
+      "AI & Content Providers",
+    ]);
+    expect(visualization.openingView).toEqual({
       cameraMode: "isometric",
-      quarterTurns: 1,
-      center: { x: -1.5, z: 1.25 },
-      groundSpan: 16,
+      quarterTurns: 0,
+      center: { x: -1, z: 1.25 },
+      groundSpan: 11,
     });
   });
 
-  it("derives deterministic orthogonal routes for every Connection", () => {
-    const routes = routeBasicConnections(POPCHOICE_VISUALIZATION, new Map());
-    const routesById = new Map(
-      routes.map((route) => [route.connectionId, route] as const),
-    );
+  it("separates operational tools, providers, and observability into zones", () => {
+    const visualization = POPCHOICE_VIEWS.operations.visualization;
 
-    expect(routeBasicConnections(POPCHOICE_VISUALIZATION, new Map())).toEqual(
-      routes,
-    );
-    expect(routes).toHaveLength(EXPECTED_CONNECTIONS.length);
-    expect(routesById.get("workers-openai")?.targetPort).not.toEqual(
-      routesById.get("movie-discovery-openai")?.targetPort,
-    );
-    expect(routesById.get("workers-tmdb")?.targetPort).not.toEqual(
-      routesById.get("movie-discovery-tmdb")?.targetPort,
-    );
+    expect(visualization.nodes).toHaveLength(11);
+    expect(visualization.connections).toHaveLength(10);
+    expect(visualization.groups.map((group) => group.label)).toEqual([
+      "Operations",
+      "Platform Data",
+      "External Providers",
+      "Runtime Signals",
+      "Observability",
+    ]);
+    expect(
+      visualization.connections
+        .filter((connection) => connection.label.length > 0)
+        .map((connection) => connection.label),
+    ).toEqual([
+      "Admin data",
+      "Queue state",
+      "Metadata",
+      "Embeddings",
+      "Catalog",
+      "Signals",
+    ]);
+  });
 
-    for (const route of routes) {
-      for (let index = 1; index < route.points.length; index += 1) {
-        const previous = route.points[index - 1]!;
-        const current = route.points[index]!;
+  it("keeps every projection self-contained and spatially valid", () => {
+    for (const id of POPCHOICE_VIEW_IDS) {
+      expectValidProjection(POPCHOICE_VIEWS[id].visualization);
+    }
+  });
 
-        expect(current.x === previous.x || current.z === previous.z).toBe(true);
+  it("derives deterministic orthogonal routes for both views", () => {
+    for (const id of POPCHOICE_VIEW_IDS) {
+      const visualization = POPCHOICE_VIEWS[id].visualization;
+      const routes = routeBasicConnections(visualization, new Map());
+
+      expect(routeBasicConnections(visualization, new Map())).toEqual(routes);
+      expect(routes).toHaveLength(visualization.connections.length);
+
+      for (const route of routes) {
+        for (let index = 1; index < route.points.length; index += 1) {
+          const previous = route.points[index - 1]!;
+          const current = route.points[index]!;
+
+          expect(current.x === previous.x || current.z === previous.z).toBe(
+            true,
+          );
+        }
       }
     }
   });

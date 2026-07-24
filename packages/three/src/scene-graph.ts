@@ -25,11 +25,68 @@ export const DEFAULT_SCENE_THEME = {
   connection: 0x83d6aa,
   gridMajor: 0xa4b8ae,
   gridMinor: 0x8aa096,
+  groupDataBorder: 0x526e72,
+  groupDataSurface: 0x162124,
+  groupExternalBorder: 0x766852,
+  groupExternalSurface: 0x242016,
+  groupObservabilityBorder: 0x76574f,
+  groupObservabilitySurface: 0x241a18,
+  groupOperationsBorder: 0x665c76,
+  groupOperationsSurface: 0x1e1a25,
+  groupRuntimeBorder: 0x4c6b5e,
+  groupRuntimeSurface: 0x16211d,
   groupBorder: 0x4c6b5e,
   groupSurface: 0x16211d,
   secondaryConnection: 0xc9816c,
   supportingConnection: 0x52675e,
 };
+
+interface GroupTreatment {
+  readonly border: number;
+  readonly surface: number;
+}
+
+function groupTreatment(group: Group): GroupTreatment {
+  if (group.styleKey === "runtime") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupRuntimeBorder,
+      surface: DEFAULT_SCENE_THEME.groupRuntimeSurface,
+    };
+  }
+
+  if (group.styleKey === "data") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupDataBorder,
+      surface: DEFAULT_SCENE_THEME.groupDataSurface,
+    };
+  }
+
+  if (group.styleKey === "external") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupExternalBorder,
+      surface: DEFAULT_SCENE_THEME.groupExternalSurface,
+    };
+  }
+
+  if (group.styleKey === "operations") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupOperationsBorder,
+      surface: DEFAULT_SCENE_THEME.groupOperationsSurface,
+    };
+  }
+
+  if (group.styleKey === "observability") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupObservabilityBorder,
+      surface: DEFAULT_SCENE_THEME.groupObservabilitySurface,
+    };
+  }
+
+  return {
+    border: DEFAULT_SCENE_THEME.groupBorder,
+    surface: DEFAULT_SCENE_THEME.groupSurface,
+  };
+}
 
 interface RouteTreatment {
   readonly arrowHeight: number;
@@ -147,6 +204,7 @@ export function updateInfiniteGrid(
 
 export function createGroupSurface(group: Group): ThreeGroup {
   const root = new ThreeGroup();
+  const treatment = groupTreatment(group);
   const width = group.bounds.maxX - group.bounds.minX;
   const depth = group.bounds.maxZ - group.bounds.minZ;
   const centerX = (group.bounds.minX + group.bounds.maxX) / 2;
@@ -155,7 +213,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
     root,
     new PlaneGeometry(width, depth),
     new MeshStandardMaterial({
-      color: DEFAULT_SCENE_THEME.groupSurface,
+      color: treatment.surface,
       depthWrite: false,
       metalness: 0,
       opacity: 0.46,
@@ -177,7 +235,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
   const border = new LineLoop(
     new BufferGeometry().setFromPoints(borderPoints),
     new LineBasicMaterial({
-      color: DEFAULT_SCENE_THEME.groupBorder,
+      color: treatment.border,
       opacity: 0.56,
       transparent: true,
     }),
