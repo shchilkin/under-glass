@@ -15,7 +15,9 @@
     "packages/react",
     "packages/poster",
     "packages/starter-assets",
-    "apps/playground"
+    "packages/test-fixtures",
+    "apps/playground",
+    "apps/vanilla-example"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",

@@ -1,11 +1,16 @@
-import type { Visualization } from "@under-glass/core";
+export {
+  createViewerController,
+  type CreateViewerControllerOptions,
+  type ViewerController,
+  type ViewerSnapshot,
+} from "./viewer-controller.js";
 
-export interface ViewerSnapshot {
-  readonly status: "idle" | "loading" | "ready" | "error";
-  readonly visualization: Visualization;
-}
-
-export interface ViewerController {
-  getSnapshot(): ViewerSnapshot;
-  subscribe(listener: () => void): () => void;
-}
+export {
+  type AssetResolver,
+  type CameraMotion,
+  type ResolvedAsset,
+  type SceneRendererDiagnostic,
+  type SceneRendererDiagnosticCode,
+  type SceneRendererStatus,
+  type SetCameraModeOptions,
+} from "@under-glass/three";

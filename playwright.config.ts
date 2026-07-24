@@ -17,15 +17,23 @@ export default defineConfig({
     },
   ],
   use: {
-    baseURL: "http://127.0.0.1:4175",
+    baseURL: "http://127.0.0.1:4185",
     screenshot: "only-on-failure",
     trace: "on-first-retry",
     viewport: { width: 1280, height: 800 },
   },
-  webServer: {
-    command:
-      "npm run dev --workspace @under-glass/playground -- --host 127.0.0.1 --port 4175",
-    reuseExistingServer: !isCI,
-    url: "http://127.0.0.1:4175",
-  },
+  webServer: [
+    {
+      command:
+        "npm run dev --workspace @under-glass/playground -- --host 127.0.0.1 --port 4185 --strictPort",
+      reuseExistingServer: !isCI,
+      url: "http://127.0.0.1:4185",
+    },
+    {
+      command:
+        "npm run dev --workspace @under-glass/vanilla-example -- --host 127.0.0.1 --port 4186 --strictPort",
+      reuseExistingServer: !isCI,
+      url: "http://127.0.0.1:4186",
+    },
+  ],
 });
