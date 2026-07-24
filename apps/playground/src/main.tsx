@@ -22,7 +22,7 @@ import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
 const showConnection = searchParameters.has("connections");
-const scenario = searchParameters.get("scenario") ?? "single";
+const scenario = searchParameters.get("scenario") ?? "graph";
 const CAMERA_MOTIONS: readonly CameraMotion[] = ["responsive", "spring"];
 const requestedCameraMotion = searchParameters.get("motion");
 const initialCameraMotion: CameraMotion =
@@ -213,7 +213,7 @@ async function resolvePlaygroundAsset(assetId: string): Promise<ResolvedAsset> {
 }
 
 function createDemoVisualization(): Visualization {
-  if (scenario === "graph") {
+  if (scenario === "graph" && !showConnection) {
     return PROJECT_GRAPH_VISUALIZATION;
   }
 
@@ -263,7 +263,7 @@ function presentationForScenario(currentScenario: string): {
   return currentScenario === "graph"
     ? {
         className: "app app--graph",
-        lede: "A host-resolved project system crossing the public renderer boundary.",
+        lede: "Recommendation runtime · web, queues, workers, data and observability.",
       }
     : {
         className: "app",
@@ -327,11 +327,17 @@ function SceneControls({
 
 interface SceneMetricsProps {
   readonly assetResolveCount: number;
+  readonly subjectLabel: string;
+  readonly subjectValue: string | undefined;
   readonly statusHistory: readonly SceneRendererStatus[];
 }
 
-function SceneMetrics({ assetResolveCount, statusHistory }: SceneMetricsProps) {
-  const assetId = demoVisualization.nodes.at(0)?.assetId;
+function SceneMetrics({
+  assetResolveCount,
+  subjectLabel,
+  subjectValue,
+  statusHistory,
+}: SceneMetricsProps) {
   const lifecycle = statusHistory.join(" → ") || "Starting";
 
   return (
@@ -341,8 +347,8 @@ function SceneMetrics({ assetResolveCount, statusHistory }: SceneMetricsProps) {
         <dd>v{demoVisualization.schemaVersion}</dd>
       </div>
       <div>
-        <dt>Asset</dt>
-        <dd>{assetId}</dd>
+        <dt>{subjectLabel}</dt>
+        <dd>{subjectValue}</dd>
       </div>
       <div>
         <dt>Nodes</dt>
@@ -368,6 +374,20 @@ function SceneMetrics({ assetResolveCount, statusHistory }: SceneMetricsProps) {
       </div>
     </dl>
   );
+}
+
+function sceneMetricSubject(currentScenario: string): {
+  readonly label: string;
+  readonly value: string | undefined;
+} {
+  if (currentScenario === "graph") {
+    return { label: "Visualization", value: "PopChoice" };
+  }
+
+  return {
+    label: "Asset",
+    value: demoVisualization.nodes.at(0)?.assetId,
+  };
 }
 
 interface RendererDiagnosticsProps {
@@ -458,27 +478,38 @@ function App() {
     setCameraMotion(motion);
   };
   const presentation = presentationForScenario(scenario);
+  const metricSubject = sceneMetricSubject(scenario);
 
   return (
     <main className={presentation.className}>
-      <p className="eyebrow">Open-source project visualization</p>
-      <h1>Under Glass</h1>
-      <p className="lede">{presentation.lede}</p>
-      <SceneControls
-        cameraMode={cameraMode}
-        cameraMotion={cameraMotion}
-        onCameraModeChange={setCameraMode}
-        onCameraMotionChange={selectCameraMotion}
-      />
+      <header className="app-header">
+        <div className="app-title">
+          <p className="eyebrow">Under Glass</p>
+          <h1>
+            {scenario === "graph" ? "PopChoice architecture" : "Under Glass"}
+          </h1>
+          <p className="lede">{presentation.lede}</p>
+        </div>
+        <SceneControls
+          cameraMode={cameraMode}
+          cameraMotion={cameraMotion}
+          onCameraModeChange={setCameraMode}
+          onCameraMotionChange={selectCameraMotion}
+        />
+      </header>
       <div
         aria-label="Under Glass 3D scene"
         className="scene"
         ref={sceneContainerRef}
       />
-      <SceneMetrics
-        assetResolveCount={assetResolveCount}
-        statusHistory={statusHistory}
-      />
+      <aside className="scene-meta">
+        <SceneMetrics
+          assetResolveCount={assetResolveCount}
+          statusHistory={statusHistory}
+          subjectLabel={metricSubject.label}
+          subjectValue={metricSubject.value}
+        />
+      </aside>
       <RendererDiagnostics diagnostics={snapshot.diagnostics} />
     </main>
   );

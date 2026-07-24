@@ -76,6 +76,52 @@ const DEMO_ASSET_VARIANTS: Readonly<Record<string, DemoAssetVariant>> = {
       { mesh: 0, scale: [1.1, 0.2, 0.55], translation: [0, 0.72, 0] },
     ],
   },
+  "dashboard-asset": {
+    color: [0.08, 0.14, 0.12, 1],
+    definition: variantDefinition("dashboard-asset", {
+      minX: -0.75,
+      minZ: -0.55,
+      maxX: 0.75,
+      maxZ: 0.55,
+    }),
+    nodes: [
+      { mesh: 0, scale: [1.15, 0.7, 0.12], translation: [0, 0.52, -0.1] },
+      { mesh: 0, scale: [0.18, 0.35, 0.14], translation: [0, 0.23, 0.05] },
+      { mesh: 0, scale: [0.75, 0.1, 0.38], translation: [0, 0.05, 0.1] },
+      { mesh: 0, scale: [0.16, 0.16, 0.08], translation: [-0.35, 0.52, -0.25] },
+      { mesh: 0, scale: [0.16, 0.3, 0.08], translation: [0, 0.45, -0.25] },
+      { mesh: 0, scale: [0.16, 0.46, 0.08], translation: [0.35, 0.37, -0.25] },
+    ],
+  },
+  "discovery-asset": {
+    color: [0.09, 0.15, 0.11, 1],
+    definition: variantDefinition("discovery-asset", {
+      minX: -0.8,
+      minZ: -0.65,
+      maxX: 0.8,
+      maxZ: 0.65,
+    }),
+    nodes: [
+      { mesh: 0, scale: [0.72, 0.72, 0.72], translation: [-0.3, 0.36, 0] },
+      { mesh: 0, scale: [0.22, 0.22, 0.22], translation: [0.5, 0.67, 0.28] },
+      { mesh: 0, scale: [0.18, 0.18, 0.18], translation: [0.42, 0.32, -0.38] },
+      { mesh: 0, scale: [0.15, 0.15, 0.15], translation: [0.55, 0.08, 0.12] },
+    ],
+  },
+  "provider-asset": {
+    color: [0.11, 0.13, 0.12, 1],
+    definition: variantDefinition("provider-asset", {
+      minX: -0.65,
+      minZ: -0.65,
+      maxX: 0.65,
+      maxZ: 0.65,
+    }),
+    nodes: [
+      { mesh: 0, scale: [0.32, 0.85, 0.32], translation: [0, 0.43, 0] },
+      { mesh: 0, scale: [0.75, 0.16, 0.75], translation: [0, 0.12, 0] },
+      { mesh: 0, scale: [0.55, 0.16, 0.55], translation: [0, 0.9, 0] },
+    ],
+  },
   "queue-asset": {
     color: [0.07, 0.16, 0.12, 1],
     definition: variantDefinition("queue-asset", {
@@ -102,6 +148,36 @@ const DEMO_ASSET_VARIANTS: Readonly<Record<string, DemoAssetVariant>> = {
       { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.15, 0] },
       { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.43, 0] },
       { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.71, 0] },
+    ],
+  },
+  "telemetry-asset": {
+    color: [0.13, 0.12, 0.09, 1],
+    definition: variantDefinition("telemetry-asset", {
+      minX: -0.85,
+      minZ: -0.7,
+      maxX: 0.85,
+      maxZ: 0.7,
+    }),
+    nodes: [
+      { mesh: 0, scale: [0.28, 0.28, 0.28], translation: [-0.52, 0.3, 0] },
+      { mesh: 0, scale: [0.28, 0.55, 0.28], translation: [0, 0.42, 0] },
+      { mesh: 0, scale: [0.28, 0.82, 0.28], translation: [0.52, 0.56, 0] },
+      { mesh: 0, scale: [1.45, 0.12, 0.65], translation: [0, 0.06, 0] },
+    ],
+  },
+  "worker-asset": {
+    color: [0.06, 0.14, 0.1, 1],
+    definition: variantDefinition("worker-asset", {
+      minX: -0.9,
+      minZ: -0.65,
+      maxX: 0.9,
+      maxZ: 0.65,
+    }),
+    nodes: [
+      { mesh: 0, scale: [0.68, 0.85, 0.62], translation: [0, 0.43, 0] },
+      { mesh: 0, scale: [0.28, 0.4, 0.32], translation: [-0.62, 0.25, 0] },
+      { mesh: 0, scale: [0.28, 0.4, 0.32], translation: [0.62, 0.25, 0] },
+      { mesh: 0, scale: [0.9, 0.12, 0.78], translation: [0, 0.06, 0] },
     ],
   },
 };

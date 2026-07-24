@@ -50,7 +50,7 @@ async function sceneColorCounts(canvas: Locator): Promise<SceneColorCounts> {
   }, dataUrl);
 }
 
-test("renders a host-resolved GLB through the public renderer boundary", async ({
+test("renders the default architecture through the public renderer boundary", async ({
   page,
 }) => {
   const glbRequests: string[] = [];
@@ -64,7 +64,7 @@ test("renders a host-resolved GLB through the public renderer boundary", async (
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Under Glass" }),
+    page.getByRole("heading", { name: "PopChoice architecture" }),
   ).toBeVisible();
   await expect(
     page.getByText("loading → ready", { exact: true }),
@@ -189,7 +189,7 @@ test("reports a stable failed lifecycle when WebGL2 is unavailable", async ({
 test("renders basic Connections instead of failing the scene", async ({
   page,
 }) => {
-  await page.goto("/?connections");
+  await page.goto("/?scenario=single&connections");
 
   await expect(
     page.getByText("loading → ready", { exact: true }),
@@ -203,20 +203,26 @@ test("renders basic Connections instead of failing the scene", async ({
 test("renders the canonical project graph in both camera modes", async ({
   page,
 }) => {
-  await page.goto("/?scenario=graph");
+  await page.goto("/");
 
   await expect(
     page.getByText("loading → ready", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByTestId("node-count")).toHaveText("8");
-  await expect(page.getByTestId("connection-count")).toHaveText("8");
+  await expect(page.getByTestId("node-count")).toHaveText("12");
+  await expect(page.getByTestId("connection-count")).toHaveText("17");
   await expect(page.getByTestId("group-count")).toHaveText("2");
-  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("9");
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(12);
   await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(2);
   await expect(
     page.locator('[data-under-glass-label="connection"]'),
-  ).toHaveCount(2);
+  ).toHaveCount(17);
+  await expect(
+    page.locator('[data-under-glass-label="node"]', { hasText: "PopChoice" }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('[data-under-glass-label="node"]', { hasText: "Web" }),
+  ).toBeVisible();
 
   const scene = page.getByLabel("Under Glass 3D scene");
   const isometric = page.getByRole("button", {
@@ -241,7 +247,7 @@ test("renders the canonical project graph in both camera modes", async ({
     "data-under-glass-camera-transition",
     "idle",
   );
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(12);
   const topPixels = await canvas.screenshot();
 
   expect(topPixels.equals(isometricPixels)).toBe(false);
@@ -280,7 +286,7 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
   );
 
   await page.setViewportSize({ width: 1000, height: 900 });
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(12);
   await expect(scene).toHaveAttribute(
     "data-under-glass-camera-transition",
     "moving",
@@ -349,7 +355,7 @@ test("selects a supported Camera Motion without recreating the scene", async ({
     "data-under-glass-camera-motion",
     "spring",
   );
-  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("9");
 
   await responsive.click();
 
@@ -361,7 +367,7 @@ test("selects a supported Camera Motion without recreating the scene", async ({
   await expect
     .poll(() => new URL(page.url()).searchParams.get("motion"))
     .toBe("responsive");
-  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("9");
 });
 
 test("normalizes the retired Smooth profile to Responsive", async ({

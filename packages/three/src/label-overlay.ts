@@ -2,9 +2,16 @@ import { OrthographicCamera, Vector3 } from "three";
 
 import type { BasicConnectionRoute, Visualization } from "@under-glass/core";
 
+import {
+  findUnoccupiedLabelCenter,
+  labelRectangle,
+  type LabelPoint,
+  type LabelRectangle,
+} from "./label-layout.js";
+
 interface ProjectedLabel {
   readonly element: HTMLDivElement;
-  readonly point: Vector3;
+  readonly points: readonly Vector3[];
   readonly type: "connection" | "group" | "node";
 }
 
@@ -52,14 +59,14 @@ function createLabel(
   layer: HTMLDivElement,
   text: string,
   type: ProjectedLabel["type"],
-  point: Vector3,
+  points: readonly Vector3[],
 ): ProjectedLabel {
   const element = document.createElement("div");
   element.dataset.underGlassLabel = type;
   element.textContent = text;
   styleLabel(element, type);
   layer.append(element);
-  return { element, point, type };
+  return { element, points, type };
 }
 
 function routeLabelPoint(route: BasicConnectionRoute): Vector3 {
@@ -93,20 +100,17 @@ function createVisualizationLabels(
   visualization: Visualization,
 ): ProjectedLabel[] {
   const nodeLabels = visualization.nodes.map((node) =>
-    createLabel(
-      layer,
-      node.label,
-      "node",
+    createLabel(layer, node.label, "node", [
       new Vector3(node.position.x, 0.15, node.position.z + 0.8),
-    ),
+    ]),
   );
   const groupLabels = visualization.groups.map((group) =>
-    createLabel(
-      layer,
-      group.label ?? group.id,
-      "group",
+    createLabel(layer, group.label ?? group.id, "group", [
       new Vector3(group.bounds.minX + 0.35, 0.08, group.bounds.minZ + 0.35),
-    ),
+      new Vector3(group.bounds.maxX - 0.35, 0.08, group.bounds.minZ + 0.35),
+      new Vector3(group.bounds.minX + 0.35, 0.08, group.bounds.maxZ - 0.35),
+      new Vector3(group.bounds.maxX - 0.35, 0.08, group.bounds.maxZ - 0.35),
+    ]),
   );
   return [...nodeLabels, ...groupLabels];
 }
@@ -132,17 +136,108 @@ function isLabelOutsideViewport(
   ].some(Boolean);
 }
 
-function renderProjectedLabel(
+interface ProjectedScreenLabel {
+  readonly hidden: boolean;
+  readonly label: ProjectedLabel;
+  readonly position: LabelPoint;
+}
+
+function projectLabel(
   label: ProjectedLabel,
   camera: OrthographicCamera,
   width: number,
   height: number,
-): void {
-  const projected = label.point.clone().project(camera);
+): ProjectedScreenLabel {
+  const projectedCandidates = label.points.map((point) =>
+    point.clone().project(camera),
+  );
+  const projected =
+    label.type === "group"
+      ? projectedCandidates.reduce((best, candidate) => {
+          const bestY = (-best.y * 0.5 + 0.5) * height;
+          const candidateY = (-candidate.y * 0.5 + 0.5) * height;
+
+          if (Math.abs(candidateY - bestY) < 1) {
+            return candidate.x < best.x ? candidate : best;
+          }
+
+          return candidateY < bestY ? candidate : best;
+        })
+      : projectedCandidates[0]!;
   const x = (projected.x * 0.5 + 0.5) * width;
   const y = (-projected.y * 0.5 + 0.5) * height;
-  label.element.style.transform = `translate3d(${x}px, ${y}px, 0) ${labelAnchor(label.type)}`;
-  label.element.hidden = isLabelOutsideViewport(projected, x, y, width, height);
+
+  return {
+    hidden: isLabelOutsideViewport(projected, x, y, width, height),
+    label,
+    position: { x, y },
+  };
+}
+
+function positionLabel(
+  projected: ProjectedScreenLabel,
+  position: LabelPoint,
+): void {
+  projected.label.element.style.transform =
+    `translate3d(${position.x}px, ${position.y}px, 0) ` +
+    labelAnchor(projected.label.type);
+}
+
+function projectedLabelRectangle(
+  projected: ProjectedScreenLabel,
+): LabelRectangle {
+  const element = projected.label.element;
+  const center =
+    projected.label.type === "group"
+      ? {
+          x: projected.position.x + element.offsetWidth / 2,
+          y: projected.position.y,
+        }
+      : projected.position;
+
+  return labelRectangle(center, {
+    height: element.offsetHeight,
+    width: element.offsetWidth,
+  });
+}
+
+function placeStaticLabels(
+  projectedLabels: readonly ProjectedScreenLabel[],
+  occupied: LabelRectangle[],
+): void {
+  for (const projected of projectedLabels) {
+    if (projected.hidden || projected.label.type === "connection") {
+      continue;
+    }
+
+    positionLabel(projected, projected.position);
+    occupied.push(projectedLabelRectangle(projected));
+  }
+}
+
+function placeConnectionLabels(
+  projectedLabels: readonly ProjectedScreenLabel[],
+  occupied: LabelRectangle[],
+  width: number,
+  height: number,
+): void {
+  for (const projected of projectedLabels) {
+    if (projected.hidden || projected.label.type !== "connection") {
+      continue;
+    }
+
+    const element = projected.label.element;
+    const position = findUnoccupiedLabelCenter(
+      projected.position,
+      { height: element.offsetHeight, width: element.offsetWidth },
+      occupied,
+      { height, width },
+    );
+    const placed = { ...projected, position };
+
+    positionLabel(placed, position);
+    occupied.push(projectedLabelRectangle(placed));
+  }
 }
 
 function renderLabels(
@@ -152,10 +247,17 @@ function renderLabels(
 ): void {
   const width = container.clientWidth;
   const height = container.clientHeight;
+  const projectedLabels = labels.map((label) =>
+    projectLabel(label, camera, width, height),
+  );
+  const occupied: LabelRectangle[] = [];
 
-  for (const label of labels) {
-    renderProjectedLabel(label, camera, width, height);
+  for (const projected of projectedLabels) {
+    projected.label.element.hidden = projected.hidden;
   }
+
+  placeStaticLabels(projectedLabels, occupied);
+  placeConnectionLabels(projectedLabels, occupied, width, height);
 }
 
 function removeLabels(labels: readonly ProjectedLabel[]): void {
@@ -171,7 +273,7 @@ function createRouteLabels(
   return routes
     .filter((route) => route.label.length > 0)
     .map((route) =>
-      createLabel(layer, route.label, "connection", routeLabelPoint(route)),
+      createLabel(layer, route.label, "connection", [routeLabelPoint(route)]),
     );
 }
 
