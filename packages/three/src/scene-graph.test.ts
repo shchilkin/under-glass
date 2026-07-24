@@ -1,5 +1,6 @@
 import {
   BufferAttribute,
+  CylinderGeometry,
   LineBasicMaterial,
   LineLoop,
   LineSegments,
@@ -9,12 +10,13 @@ import {
 } from "three";
 import { describe, expect, it } from "vitest";
 
-import type { BasicConnectionRoute, Group } from "@under-glass/core";
+import type { BasicConnectionRoute, Group, Node } from "@under-glass/core";
 
 import {
   createConnectionRoute,
   createGroupSurface,
   createInfiniteGrid,
+  createNodeLabel,
   DEFAULT_SCENE_THEME,
   updateInfiniteGrid,
 } from "./scene-graph.js";
@@ -99,6 +101,10 @@ describe("project graph presentation", () => {
     const surface = meshNamed(presentation, "Group Surface");
     const border = presentation.getObjectByName("Group Border");
 
+    expect(presentation.userData.groupLabel).toEqual({
+      rendering: "world-space",
+      text: "Core",
+    });
     expect(surface.rotation.x).toBeCloseTo(-Math.PI / 2, 6);
     expect(surface.receiveShadow).toBe(true);
     expect((surface.material as MeshStandardMaterial).color.getHex()).toBe(
@@ -111,10 +117,68 @@ describe("project graph presentation", () => {
     ).toBe(DEFAULT_SCENE_THEME.groupBorder);
   });
 
+  it("marks Node names for world-space rendering", () => {
+    const node: Node = {
+      assetId: "service",
+      id: "api",
+      label: "API",
+      position: { x: 2, z: 3 },
+      quarterTurns: 0,
+    };
+    const presentation = createNodeLabel(node);
+
+    expect(presentation.userData.nodeLabel).toEqual({
+      rendering: "world-space",
+      text: "API",
+    });
+  });
+
+  it("maps host-defined Group Style Keys to distinct quiet regions", () => {
+    const group: Group = {
+      id: "data",
+      label: "Data",
+      bounds: { minX: -2, minZ: -1, maxX: 3, maxZ: 4 },
+      styleKey: "data",
+    };
+    const presentation = createGroupSurface(group);
+    const surface = meshNamed(presentation, "Group Surface");
+    const border = presentation.getObjectByName("Group Border") as LineLoop;
+
+    expect((surface.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupDataSurface,
+    );
+    expect((border.material as LineBasicMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupDataBorder,
+    );
+  });
+
+  it("falls back to the default Group treatment for unknown Style Keys", () => {
+    const group: Group = {
+      id: "future",
+      label: "Future",
+      bounds: { minX: -2, minZ: -1, maxX: 3, maxZ: 4 },
+      styleKey: "host-defined-but-unmapped",
+    };
+    const presentation = createGroupSurface(group);
+    const surface = meshNamed(presentation, "Group Surface");
+    const border = presentation.getObjectByName("Group Border") as LineLoop;
+
+    expect((surface.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupSurface,
+    );
+    expect((border.material as LineBasicMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.groupBorder,
+    );
+  });
+
   it("renders a one-way route with a forward arrow at the target", () => {
     const presentation = createConnectionRoute(route);
     const arrow = meshNamed(presentation, "Forward Arrow");
 
+    expect(presentation.userData.routeLabel).toEqual({
+      rendering: "world-space",
+      text: "Request",
+    });
     expect(arrow.position.x).toBeCloseTo(1.94, 6);
     expect(arrow.position.z).toBeCloseTo(0, 6);
     expect(presentation.getObjectByName("Backward Arrow")).toBeUndefined();
@@ -129,6 +193,42 @@ describe("project graph presentation", () => {
 
     expect((segment.material as MeshStandardMaterial).color.getHex()).toBe(
       DEFAULT_SCENE_THEME.connection,
+    );
+    expect((segment.material as MeshStandardMaterial).roughness).toBe(0.4);
+  });
+
+  it("distinguishes primary, supporting, and telemetry routes", () => {
+    const primary = meshNamed(
+      createConnectionRoute({ ...route, styleKey: "primary" }),
+      "Route Segment",
+    );
+    const supporting = meshNamed(
+      createConnectionRoute({ ...route, styleKey: "supporting" }),
+      "Route Segment",
+    );
+    const telemetry = meshNamed(
+      createConnectionRoute({ ...route, styleKey: "telemetry" }),
+      "Route Segment",
+    );
+
+    expect((primary.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.connection,
+    );
+    expect((supporting.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.supportingConnection,
+    );
+    expect((telemetry.material as MeshStandardMaterial).color.getHex()).toBe(
+      DEFAULT_SCENE_THEME.secondaryConnection,
+    );
+    expect(
+      (primary.geometry as CylinderGeometry).parameters.radiusTop,
+    ).toBeGreaterThan(
+      (supporting.geometry as CylinderGeometry).parameters.radiusTop,
+    );
+    expect(
+      (primary.geometry as CylinderGeometry).parameters.radiusTop,
+    ).toBeGreaterThan(
+      (telemetry.geometry as CylinderGeometry).parameters.radiusTop,
     );
   });
 });

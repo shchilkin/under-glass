@@ -197,7 +197,7 @@ export function createGroundPlane(
   const material = new ShadowMaterial({
     color: 0x000000,
     depthWrite: false,
-    opacity: 0.28,
+    opacity: 0.17,
     transparent: true,
   });
   const groundPlane = new Mesh(geometry, material);

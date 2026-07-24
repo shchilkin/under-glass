@@ -21,7 +21,8 @@ function applyOpeningViewProjection(
   height: number,
 ): void {
   const aspect = Math.max(1, width) / Math.max(1, height);
-  const halfGroundSpan = openingView.groundSpan / 2;
+  const responsiveGroundSpan = openingView.groundSpan / Math.min(1, aspect);
+  const halfGroundSpan = responsiveGroundSpan / 2;
   camera.left = -halfGroundSpan * aspect;
   camera.right = halfGroundSpan * aspect;
   camera.top = halfGroundSpan;

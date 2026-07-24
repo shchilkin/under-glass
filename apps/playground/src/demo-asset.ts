@@ -51,57 +51,113 @@ const DEMO_ASSET_VARIANTS: Readonly<Record<string, DemoAssetVariant>> = {
   "browser-asset": {
     color: [0.08, 0.12, 0.11, 1],
     definition: variantDefinition("browser-asset", {
-      minX: -0.8,
-      minZ: -0.55,
-      maxX: 0.8,
-      maxZ: 0.55,
+      minX: -0.65,
+      minZ: -0.45,
+      maxX: 0.65,
+      maxZ: 0.45,
     }),
     nodes: [
-      { mesh: 0, scale: [1.3, 0.8, 0.1], translation: [0, 0.55, -0.1] },
-      { mesh: 0, scale: [0.16, 0.55, 0.12], translation: [0, 0.28, 0.1] },
-      { mesh: 0, scale: [0.7, 0.1, 0.4], translation: [0, 0.05, 0.16] },
+      { mesh: 0, scale: [1.05, 0.64, 0.08], translation: [0, 0.4, -0.04] },
+      { mesh: 0, scale: [0.7, 0.08, 0.32], translation: [0, 0.04, 0.08] },
     ],
   },
   "database-asset": {
     color: [0.07, 0.13, 0.1, 1],
     definition: variantDefinition("database-asset", {
-      minX: -0.7,
-      minZ: -0.7,
-      maxX: 0.7,
-      maxZ: 0.7,
+      minX: -0.65,
+      minZ: -0.55,
+      maxX: 0.65,
+      maxZ: 0.55,
     }),
     nodes: [
-      { mesh: 0, scale: [1.1, 0.2, 0.55], translation: [0, 0.16, 0] },
-      { mesh: 0, scale: [1.1, 0.2, 0.55], translation: [0, 0.44, 0] },
-      { mesh: 0, scale: [1.1, 0.2, 0.55], translation: [0, 0.72, 0] },
+      { mesh: 0, scale: [1, 0.22, 0.46], translation: [0, 0.14, 0] },
+      { mesh: 0, scale: [1, 0.22, 0.46], translation: [0, 0.42, 0] },
+    ],
+  },
+  "dashboard-asset": {
+    color: [0.08, 0.14, 0.12, 1],
+    definition: variantDefinition("dashboard-asset", {
+      minX: -0.65,
+      minZ: -0.45,
+      maxX: 0.65,
+      maxZ: 0.45,
+    }),
+    nodes: [
+      { mesh: 0, scale: [1.05, 0.58, 0.08], translation: [0, 0.36, -0.04] },
+      { mesh: 0, scale: [0.72, 0.08, 0.32], translation: [0, 0.04, 0.08] },
+    ],
+  },
+  "discovery-asset": {
+    color: [0.09, 0.15, 0.11, 1],
+    definition: variantDefinition("discovery-asset", {
+      minX: -0.6,
+      minZ: -0.5,
+      maxX: 0.6,
+      maxZ: 0.5,
+    }),
+    nodes: [{ mesh: 0, scale: [0.88, 0.54, 0.42], translation: [0, 0.27, 0] }],
+  },
+  "provider-asset": {
+    color: [0.11, 0.13, 0.12, 1],
+    definition: variantDefinition("provider-asset", {
+      minX: -0.5,
+      minZ: -0.5,
+      maxX: 0.5,
+      maxZ: 0.5,
+    }),
+    nodes: [
+      { mesh: 0, scale: [0.5, 0.72, 0.24], translation: [0, 0.36, 0] },
+      { mesh: 0, scale: [0.72, 0.1, 0.42], translation: [0, 0.05, 0] },
     ],
   },
   "queue-asset": {
     color: [0.07, 0.16, 0.12, 1],
     definition: variantDefinition("queue-asset", {
-      minX: -0.9,
-      minZ: -0.55,
-      maxX: 0.9,
-      maxZ: 0.55,
+      minX: -0.7,
+      minZ: -0.45,
+      maxX: 0.7,
+      maxZ: 0.45,
     }),
-    nodes: [-0.6, -0.2, 0.2, 0.6].map((x) => ({
+    nodes: [-0.32, 0.32].map((x) => ({
       mesh: 0,
-      scale: [0.22, 0.62, 0.34],
-      translation: [x, 0.31, 0],
+      scale: [0.42, 0.54, 0.36],
+      translation: [x, 0.27, 0],
     })),
   },
   "service-asset": {
     color: [0.06, 0.11, 0.09, 1],
     definition: variantDefinition("service-asset", {
-      minX: -0.65,
-      minZ: -0.6,
-      maxX: 0.65,
-      maxZ: 0.6,
+      minX: -0.6,
+      minZ: -0.5,
+      maxX: 0.6,
+      maxZ: 0.5,
+    }),
+    nodes: [{ mesh: 0, scale: [0.92, 0.5, 0.42], translation: [0, 0.25, 0] }],
+  },
+  "telemetry-asset": {
+    color: [0.13, 0.12, 0.09, 1],
+    definition: variantDefinition("telemetry-asset", {
+      minX: -0.7,
+      minZ: -0.55,
+      maxX: 0.7,
+      maxZ: 0.55,
     }),
     nodes: [
-      { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.15, 0] },
-      { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.43, 0] },
-      { mesh: 0, scale: [1, 0.22, 0.48], translation: [0, 0.71, 0] },
+      { mesh: 0, scale: [0.36, 0.32, 0.34], translation: [-0.26, 0.16, 0] },
+      { mesh: 0, scale: [0.36, 0.64, 0.34], translation: [0.26, 0.32, 0] },
+    ],
+  },
+  "worker-asset": {
+    color: [0.06, 0.14, 0.1, 1],
+    definition: variantDefinition("worker-asset", {
+      minX: -0.7,
+      minZ: -0.55,
+      maxX: 0.7,
+      maxZ: 0.55,
+    }),
+    nodes: [
+      { mesh: 0, scale: [0.54, 0.54, 0.42], translation: [-0.28, 0.27, 0] },
+      { mesh: 0, scale: [0.54, 0.54, 0.42], translation: [0.28, 0.27, 0] },
     ],
   },
 };

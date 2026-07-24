@@ -5,6 +5,9 @@ interface SceneColorCounts {
   readonly placeholder: number;
 }
 
+const RECOMMENDATION_ASSET_RESOLVE_COUNT = 6;
+const RECOMMENDATION_NODE_COUNT = 7;
+
 async function sceneColorCounts(canvas: Locator): Promise<SceneColorCounts> {
   const screenshot = await canvas.screenshot();
   const dataUrl = `data:image/png;base64,${screenshot.toString("base64")}`;
@@ -50,7 +53,7 @@ async function sceneColorCounts(canvas: Locator): Promise<SceneColorCounts> {
   }, dataUrl);
 }
 
-test("renders a host-resolved GLB through the public renderer boundary", async ({
+test("renders the default architecture through the public renderer boundary", async ({
   page,
 }) => {
   const glbRequests: string[] = [];
@@ -64,7 +67,7 @@ test("renders a host-resolved GLB through the public renderer boundary", async (
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "Under Glass" }),
+    page.getByRole("heading", { name: "PopChoice architecture" }),
   ).toBeVisible();
   await expect(
     page.getByText("loading → ready", { exact: true }),
@@ -189,7 +192,7 @@ test("reports a stable failed lifecycle when WebGL2 is unavailable", async ({
 test("renders basic Connections instead of failing the scene", async ({
   page,
 }) => {
-  await page.goto("/?connections");
+  await page.goto("/?scenario=single&connections");
 
   await expect(
     page.getByText("loading → ready", { exact: true }),
@@ -200,35 +203,65 @@ test("renders basic Connections instead of failing the scene", async ({
   );
 });
 
-test("renders the canonical project graph in both camera modes", async ({
+test("renders the focused PopChoice views and both camera modes", async ({
   page,
 }) => {
-  await page.goto("/?scenario=graph");
+  await page.goto("/");
 
   await expect(
     page.getByText("loading → ready", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByTestId("node-count")).toHaveText("8");
-  await expect(page.getByTestId("connection-count")).toHaveText("8");
-  await expect(page.getByTestId("group-count")).toHaveText("2");
-  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
-  await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(2);
+  await expect(page.getByTestId("node-count")).toHaveText(
+    String(RECOMMENDATION_NODE_COUNT),
+  );
+  await expect(page.getByTestId("connection-count")).toHaveText("7");
+  await expect(page.getByTestId("group-count")).toHaveText("3");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText(
+    String(RECOMMENDATION_ASSET_RESOLVE_COUNT),
+  );
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
+  );
+  await expect(
+    page.locator('[data-under-glass-label="node"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(3);
+  await expect(
+    page.locator('[data-under-glass-label="group"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
   await expect(
     page.locator('[data-under-glass-label="connection"]'),
-  ).toHaveCount(2);
+  ).toHaveCount(7);
+  await expect(
+    page.locator('[data-under-glass-label="connection"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(
+    page.locator('[data-under-glass-label="node"]', { hasText: "PopChoice" }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('[data-under-glass-label="node"]', { hasText: "Web" }),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
 
   const scene = page.getByLabel("Under Glass 3D scene");
+  const recommendation = page.getByRole("button", {
+    name: /Recommendation/,
+  });
+  const operations = page.getByRole("button", { name: /Operations/ });
   const isometric = page.getByRole("button", {
     name: "Isometric",
     exact: true,
   });
   const top = page.getByRole("button", { name: "Top", exact: true });
 
+  await expect(recommendation).toHaveAttribute("aria-pressed", "true");
   await expect(isometric).toHaveAttribute("aria-pressed", "true");
   await expect(scene).toHaveAttribute(
     "data-under-glass-camera-mode",
     "isometric",
+  );
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-hidden-label-count",
+    /^\d+$/,
   );
   const canvas = page.locator("canvas[data-under-glass-renderer]");
   const isometricPixels = await canvas.screenshot();
@@ -241,10 +274,72 @@ test("renders the canonical project graph in both camera modes", async ({
     "data-under-glass-camera-transition",
     "idle",
   );
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
+  );
   const topPixels = await canvas.screenshot();
 
   expect(topPixels.equals(isometricPixels)).toBe(false);
+
+  await operations.click();
+
+  await expect(operations).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("node-count")).toHaveText("11");
+  await expect(page.getByTestId("connection-count")).toHaveText("10");
+  await expect(page.getByTestId("group-count")).toHaveText("5");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("8");
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(11);
+  await expect(
+    page.locator('[data-under-glass-label="node"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(page.locator('[data-under-glass-label="group"]')).toHaveCount(5);
+  await expect(
+    page.locator('[data-under-glass-label="group"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect(
+    page.locator('[data-under-glass-label="connection"]'),
+  ).toHaveCount(6);
+  await expect(
+    page.locator('[data-under-glass-label="connection"]').first(),
+  ).toHaveAttribute("data-under-glass-label-rendering", "world-space");
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("view"))
+    .toBe("operations");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-mode",
+    "isometric",
+  );
+  const operationsPixels = await canvas.screenshot();
+
+  expect(operationsPixels.equals(isometricPixels)).toBe(false);
+});
+
+test("declutters world-space labels in a compact viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 640, height: 800 });
+  await page.goto("/");
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      Number(
+        (await scene.getAttribute("data-under-glass-hidden-label-count")) ?? 0,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
+  );
+  await expect(
+    page.locator('[data-under-glass-label="connection"]'),
+  ).toHaveCount(7);
 });
 
 test("retargets an active Camera Mode Transition to the latest requested mode", async ({
@@ -280,7 +375,9 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
   );
 
   await page.setViewportSize({ width: 1000, height: 900 });
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(8);
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
+  );
   await expect(scene).toHaveAttribute(
     "data-under-glass-camera-transition",
     "moving",
@@ -349,7 +446,9 @@ test("selects a supported Camera Motion without recreating the scene", async ({
     "data-under-glass-camera-motion",
     "spring",
   );
-  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText(
+    String(RECOMMENDATION_ASSET_RESOLVE_COUNT),
+  );
 
   await responsive.click();
 
@@ -361,7 +460,9 @@ test("selects a supported Camera Motion without recreating the scene", async ({
   await expect
     .poll(() => new URL(page.url()).searchParams.get("motion"))
     .toBe("responsive");
-  await expect(page.getByTestId("asset-resolve-count")).toHaveText("4");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText(
+    String(RECOMMENDATION_ASSET_RESOLVE_COUNT),
+  );
 });
 
 test("normalizes the retired Smooth profile to Responsive", async ({

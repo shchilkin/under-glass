@@ -1,0 +1,3 @@
+# Keep preset-view projection in the host
+
+Purpose-specific architecture views may project one host-owned semantic model into multiple concrete Visualizations, but the projection remains playground or embedding-application code until the interaction proves a reusable public contract. The renderer continues to receive exactly one validated Visualization and does not gain Source Graph, View, filtering, or persistence concepts. Preset views reuse stable Node and Connection IDs where an entity appears in more than one view; changing views may alter placement, grouping, labels, visible entities, and Opening View without changing the identity of the underlying system element.

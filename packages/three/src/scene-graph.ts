@@ -1,5 +1,6 @@
 import {
   BufferGeometry,
+  CanvasTexture,
   ConeGeometry,
   CylinderGeometry,
   Group as ThreeGroup,
@@ -7,8 +8,10 @@ import {
   LineLoop,
   LineSegments,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  SRGBColorSpace,
   SphereGeometry,
   Vector3,
   type Material,
@@ -16,7 +19,7 @@ import {
   type OrthographicCamera,
 } from "three";
 
-import type { BasicConnectionRoute, Group } from "@under-glass/core";
+import type { BasicConnectionRoute, Group, Node } from "@under-glass/core";
 
 import { disposeObjectResources } from "./resource-disposal.js";
 import { deriveViewportGroundBounds } from "./scene-camera.js";
@@ -25,15 +28,350 @@ export const DEFAULT_SCENE_THEME = {
   connection: 0x83d6aa,
   gridMajor: 0xa4b8ae,
   gridMinor: 0x8aa096,
+  groupDataBorder: 0x526e72,
+  groupDataSurface: 0x162124,
+  groupExternalBorder: 0x766852,
+  groupExternalSurface: 0x242016,
+  groupObservabilityBorder: 0x76574f,
+  groupObservabilitySurface: 0x241a18,
+  groupOperationsBorder: 0x665c76,
+  groupOperationsSurface: 0x1e1a25,
+  groupRuntimeBorder: 0x4c6b5e,
+  groupRuntimeSurface: 0x16211d,
   groupBorder: 0x4c6b5e,
   groupSurface: 0x16211d,
-  secondaryConnection: 0xe87a64,
+  secondaryConnection: 0xc9816c,
+  supportingConnection: 0x52675e,
 };
 
-function routeColor(route: BasicConnectionRoute): number {
-  return route.styleKey === "telemetry"
-    ? DEFAULT_SCENE_THEME.secondaryConnection
-    : DEFAULT_SCENE_THEME.connection;
+interface GroupTreatment {
+  readonly border: number;
+  readonly label: string;
+  readonly surface: number;
+}
+
+function groupTreatment(group: Group): GroupTreatment {
+  if (group.styleKey === "runtime") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupRuntimeBorder,
+      label: "#b5d0c2",
+      surface: DEFAULT_SCENE_THEME.groupRuntimeSurface,
+    };
+  }
+
+  if (group.styleKey === "data") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupDataBorder,
+      label: "#b5c9cb",
+      surface: DEFAULT_SCENE_THEME.groupDataSurface,
+    };
+  }
+
+  if (group.styleKey === "external") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupExternalBorder,
+      label: "#d0c3a0",
+      surface: DEFAULT_SCENE_THEME.groupExternalSurface,
+    };
+  }
+
+  if (group.styleKey === "operations") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupOperationsBorder,
+      label: "#c6b9d5",
+      surface: DEFAULT_SCENE_THEME.groupOperationsSurface,
+    };
+  }
+
+  if (group.styleKey === "observability") {
+    return {
+      border: DEFAULT_SCENE_THEME.groupObservabilityBorder,
+      label: "#d1aea3",
+      surface: DEFAULT_SCENE_THEME.groupObservabilitySurface,
+    };
+  }
+
+  return {
+    border: DEFAULT_SCENE_THEME.groupBorder,
+    label: "#b5d0c2",
+    surface: DEFAULT_SCENE_THEME.groupSurface,
+  };
+}
+
+const GROUP_LABEL_CANVAS_HEIGHT = 128;
+const GROUP_LABEL_FONT_SIZE = 54;
+const GROUP_LABEL_TRACKING = 7;
+const GROUP_LABEL_WORLD_HEIGHT = 0.8;
+const GROUP_LABEL_WORLD_MARGIN = 0.42;
+const NODE_LABEL_CANVAS_HEIGHT = 96;
+const NODE_LABEL_FONT_SIZE = 44;
+const NODE_LABEL_MAX_WORLD_WIDTH = 4;
+const NODE_LABEL_WORLD_HEIGHT = 0.76;
+const NODE_LABEL_Z_OFFSET = 0.88;
+
+interface CanvasDrawingSurface {
+  readonly canvas: HTMLCanvasElement;
+  readonly context: CanvasRenderingContext2D;
+}
+
+function createCanvasDrawingSurface(): CanvasDrawingSurface | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  return context === null ? null : { canvas, context };
+}
+
+function textureFromCanvas(canvas: HTMLCanvasElement): CanvasTexture {
+  const texture = new CanvasTexture(canvas);
+  texture.anisotropy = 4;
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+function trackedTextWidth(
+  context: CanvasRenderingContext2D,
+  text: string,
+): number {
+  const glyphWidth = [...text].reduce(
+    (width, glyph) => width + context.measureText(glyph).width,
+    0,
+  );
+  return glyphWidth + Math.max(0, text.length - 1) * GROUP_LABEL_TRACKING;
+}
+
+function drawTrackedText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+): void {
+  let cursor = x;
+
+  for (const glyph of text) {
+    context.fillText(glyph, cursor, y);
+    cursor += context.measureText(glyph).width + GROUP_LABEL_TRACKING;
+  }
+}
+
+function createGroupLabelTexture(
+  text: string,
+  color: string,
+): CanvasTexture | null {
+  const surface = createCanvasDrawingSurface();
+
+  if (surface === null) {
+    return null;
+  }
+
+  const { canvas, context } = surface;
+  context.font = `700 ${GROUP_LABEL_FONT_SIZE}px Inter, ui-sans-serif, system-ui, sans-serif`;
+  const uppercaseText = text.toUpperCase();
+  const horizontalPadding = 28;
+  canvas.width = Math.ceil(
+    trackedTextWidth(context, uppercaseText) + horizontalPadding * 2,
+  );
+  canvas.height = GROUP_LABEL_CANVAS_HEIGHT;
+
+  context.font = `700 ${GROUP_LABEL_FONT_SIZE}px Inter, ui-sans-serif, system-ui, sans-serif`;
+  context.fillStyle = color;
+  context.textBaseline = "middle";
+  drawTrackedText(
+    context,
+    uppercaseText,
+    horizontalPadding,
+    GROUP_LABEL_CANVAS_HEIGHT / 2,
+  );
+
+  return textureFromCanvas(canvas);
+}
+
+function addGroupLabel(
+  root: ThreeGroup,
+  group: Group,
+  treatment: GroupTreatment,
+): void {
+  const text = group.label ?? group.id;
+  const texture = createGroupLabelTexture(text, treatment.label);
+
+  root.userData.groupLabel = {
+    rendering: "world-space",
+    text,
+  };
+
+  if (texture === null) {
+    return;
+  }
+
+  const groupWidth = group.bounds.maxX - group.bounds.minX;
+  const horizontalMargin = Math.min(
+    GROUP_LABEL_WORLD_MARGIN,
+    groupWidth * 0.15,
+  );
+  const availableWidth = groupWidth - horizontalMargin * 2;
+  const textureAspect =
+    (texture.image as HTMLCanvasElement).width /
+    (texture.image as HTMLCanvasElement).height;
+  const naturalWidth = GROUP_LABEL_WORLD_HEIGHT * textureAspect;
+  const labelWidth = Math.min(availableWidth, naturalWidth);
+  const labelHeight = labelWidth / textureAspect;
+  const label = addMesh(
+    root,
+    new PlaneGeometry(labelWidth, labelHeight),
+    new MeshBasicMaterial({
+      depthWrite: false,
+      map: texture,
+      opacity: 0.9,
+      toneMapped: false,
+      transparent: true,
+    }),
+    [
+      group.bounds.minX + horizontalMargin + labelWidth / 2,
+      0.032,
+      group.bounds.minZ + GROUP_LABEL_WORLD_MARGIN + labelHeight / 2,
+    ],
+  );
+  label.name = "Group Label";
+  label.rotation.x = -Math.PI / 2;
+  label.userData.labelBounds = {
+    depth: labelHeight,
+    width: labelWidth,
+  };
+  label.userData.labelRole = "group";
+  label.userData.text = text;
+}
+
+function createNodeLabelTexture(text: string): CanvasTexture | null {
+  const surface = createCanvasDrawingSurface();
+
+  if (surface === null) {
+    return null;
+  }
+
+  const { canvas, context } = surface;
+  const horizontalPadding = 26;
+  const font = `700 ${NODE_LABEL_FONT_SIZE}px Inter, ui-sans-serif, system-ui, sans-serif`;
+
+  context.font = font;
+  canvas.width = Math.ceil(
+    context.measureText(text).width + horizontalPadding * 2,
+  );
+  canvas.height = NODE_LABEL_CANVAS_HEIGHT;
+
+  context.font = font;
+  context.fillStyle = "#f0f5f2";
+  context.shadowColor = "rgb(0 0 0 / 92%)";
+  context.shadowBlur = 10;
+  context.shadowOffsetY = 4;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  return textureFromCanvas(canvas);
+}
+
+export function createNodeLabel(node: Node): ThreeGroup {
+  const root = new ThreeGroup();
+  const texture = createNodeLabelTexture(node.label);
+
+  root.name = `Node Label ${node.id}`;
+  root.userData.nodeLabel = {
+    rendering: "world-space",
+    text: node.label,
+  };
+
+  if (texture === null) {
+    return root;
+  }
+
+  const textureAspect =
+    (texture.image as HTMLCanvasElement).width /
+    (texture.image as HTMLCanvasElement).height;
+  const naturalWidth = NODE_LABEL_WORLD_HEIGHT * textureAspect;
+  const labelWidth = Math.min(NODE_LABEL_MAX_WORLD_WIDTH, naturalWidth);
+  const labelHeight = labelWidth / textureAspect;
+  const position = new Vector3(
+    node.position.x,
+    0.255,
+    node.position.z + NODE_LABEL_Z_OFFSET,
+  );
+  const label = addMesh(
+    root,
+    new PlaneGeometry(labelWidth, labelHeight),
+    new MeshBasicMaterial({
+      depthWrite: false,
+      map: texture,
+      opacity: 0.98,
+      toneMapped: false,
+      transparent: true,
+    }),
+    [position.x, position.y, position.z],
+  );
+
+  label.name = "Node Label";
+  label.rotation.x = -Math.PI / 2;
+  label.userData.labelBounds = {
+    depth: labelHeight,
+    width: labelWidth,
+  };
+  label.userData.labelOrigin = { x: position.x, z: position.z };
+  label.userData.labelRole = "node";
+  label.userData.labelShiftAxis = "z";
+  label.userData.text = node.label;
+  return root;
+}
+
+interface RouteTreatment {
+  readonly arrowHeight: number;
+  readonly arrowRadius: number;
+  readonly color: number;
+  readonly emissiveIntensity: number;
+  readonly labelColor: string;
+  readonly metalness: number;
+  readonly radius: number;
+  readonly roughness: number;
+}
+
+function routeTreatment(route: BasicConnectionRoute): RouteTreatment {
+  if (route.styleKey === "supporting") {
+    return {
+      arrowHeight: 0.24,
+      arrowRadius: 0.095,
+      color: DEFAULT_SCENE_THEME.supportingConnection,
+      emissiveIntensity: 0.04,
+      labelColor: "#d1dcd6",
+      metalness: 0.1,
+      radius: 0.03,
+      roughness: 0.65,
+    };
+  }
+
+  if (route.styleKey === "telemetry") {
+    return {
+      arrowHeight: 0.26,
+      arrowRadius: 0.105,
+      color: DEFAULT_SCENE_THEME.secondaryConnection,
+      emissiveIntensity: 0.08,
+      labelColor: "#e4b8ad",
+      metalness: 0.1,
+      radius: 0.034,
+      roughness: 0.65,
+    };
+  }
+
+  return {
+    arrowHeight: 0.32,
+    arrowRadius: 0.14,
+    color: DEFAULT_SCENE_THEME.connection,
+    emissiveIntensity: 0.28,
+    labelColor: "#d9f2e5",
+    metalness: 0.25,
+    radius: 0.052,
+    roughness: 0.4,
+  };
 }
 
 function addMesh(
@@ -100,12 +438,13 @@ export function updateInfiniteGrid(
   };
 
   root.userData.viewportGroundBounds = bounds;
-  root.add(createLines(1, DEFAULT_SCENE_THEME.gridMinor, 0.15));
-  root.add(createLines(4, DEFAULT_SCENE_THEME.gridMajor, 0.26));
+  root.add(createLines(1, DEFAULT_SCENE_THEME.gridMinor, 0.055));
+  root.add(createLines(4, DEFAULT_SCENE_THEME.gridMajor, 0.13));
 }
 
 export function createGroupSurface(group: Group): ThreeGroup {
   const root = new ThreeGroup();
+  const treatment = groupTreatment(group);
   const width = group.bounds.maxX - group.bounds.minX;
   const depth = group.bounds.maxZ - group.bounds.minZ;
   const centerX = (group.bounds.minX + group.bounds.maxX) / 2;
@@ -114,10 +453,10 @@ export function createGroupSurface(group: Group): ThreeGroup {
     root,
     new PlaneGeometry(width, depth),
     new MeshStandardMaterial({
-      color: DEFAULT_SCENE_THEME.groupSurface,
+      color: treatment.surface,
       depthWrite: false,
       metalness: 0,
-      opacity: 0.72,
+      opacity: 0.46,
       roughness: 1,
       transparent: true,
     }),
@@ -126,6 +465,7 @@ export function createGroupSurface(group: Group): ThreeGroup {
   surface.name = "Group Surface";
   surface.rotation.x = -Math.PI / 2;
   surface.receiveShadow = true;
+  addGroupLabel(root, group, treatment);
 
   const borderPoints = [
     new Vector3(group.bounds.minX, 0.018, group.bounds.minZ),
@@ -136,8 +476,8 @@ export function createGroupSurface(group: Group): ThreeGroup {
   const border = new LineLoop(
     new BufferGeometry().setFromPoints(borderPoints),
     new LineBasicMaterial({
-      color: DEFAULT_SCENE_THEME.groupBorder,
-      opacity: 0.9,
+      color: treatment.border,
+      opacity: 0.56,
       transparent: true,
     }),
   );
@@ -154,18 +494,212 @@ function createRouteArrow(
   direction: Vector3,
   material: MeshStandardMaterial,
   name: string,
+  radius: number,
+  height: number,
 ): void {
-  const arrow = addMesh(parent, new ConeGeometry(0.14, 0.32, 16), material, [
-    point.x,
-    point.y,
-    point.z,
-  ]);
+  const arrow = addMesh(
+    parent,
+    new ConeGeometry(radius, height, 16),
+    material,
+    [point.x, point.y, point.z],
+  );
   arrow.name = name;
   arrow.quaternion.setFromUnitVectors(
     new Vector3(0, 1, 0),
     direction.normalize(),
   );
-  arrow.position.addScaledVector(direction, -0.06);
+  arrow.position.addScaledVector(direction, -height * 0.1875);
+}
+
+const ROUTE_LABEL_CANVAS_HEIGHT = 96;
+const ROUTE_LABEL_FONT_SIZE = 40;
+const ROUTE_LABEL_WORLD_HEIGHT = 0.66;
+
+function createRouteLabelTexture(
+  text: string,
+  color: string,
+): CanvasTexture | null {
+  const surface = createCanvasDrawingSurface();
+
+  if (surface === null) {
+    return null;
+  }
+
+  const { canvas, context } = surface;
+  const horizontalPadding = 22;
+  context.font = `700 ${ROUTE_LABEL_FONT_SIZE}px "SFMono-Regular", Consolas, "Liberation Mono", monospace`;
+  canvas.width = Math.ceil(
+    context.measureText(text).width + horizontalPadding * 2,
+  );
+  canvas.height = ROUTE_LABEL_CANVAS_HEIGHT;
+
+  context.fillStyle = "rgb(7 11 9 / 92%)";
+  context.beginPath();
+  context.roundRect(2, 2, canvas.width - 4, canvas.height - 4, 14);
+  context.fill();
+  context.strokeStyle = "rgb(233 239 235 / 18%)";
+  context.lineWidth = 2;
+  context.stroke();
+
+  context.font = `700 ${ROUTE_LABEL_FONT_SIZE}px "SFMono-Regular", Consolas, "Liberation Mono", monospace`;
+  context.fillStyle = color;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  return textureFromCanvas(canvas);
+}
+
+interface RouteLabelPlacement {
+  readonly position: Vector3;
+  readonly quarterTurn: boolean;
+}
+
+interface RouteSegment {
+  readonly end: Vector3;
+  readonly length: number;
+  readonly start: Vector3;
+}
+
+function longestRouteSegment(points: readonly Vector3[]): RouteSegment | null {
+  let longest: RouteSegment | null = null;
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+
+    if (start !== undefined && end !== undefined) {
+      const length = start.distanceTo(end);
+
+      if (longest === null || length > longest.length) {
+        longest = { end, length, start };
+      }
+    }
+  }
+
+  return longest;
+}
+
+function connectionLabelSlot(connectionId: string): number {
+  const hash = [...connectionId].reduce(
+    (value, character) => (value * 31 + (character.codePointAt(0) ?? 0)) >>> 0,
+    0,
+  );
+  return hash % 5;
+}
+
+function positionRouteLabel(
+  segment: RouteSegment,
+  quarterTurn: boolean,
+  slot: number,
+  useLanes: boolean,
+): Vector3 {
+  const progress = quarterTurn ? 0.3 : 0.3 + slot * 0.1;
+  const laneOffset = useLanes ? ([-0.68, 0, 0.68, -0.34, 0.34][slot] ?? 0) : 0;
+  const position = segment.start
+    .clone()
+    .lerp(segment.end, progress)
+    .setY(0.235);
+
+  if (quarterTurn) {
+    position.x += 0.32 + laneOffset;
+  } else {
+    position.z += laneOffset - 0.32;
+  }
+
+  return position;
+}
+
+function routeLabelPlacement(
+  connectionId: string,
+  points: readonly Vector3[],
+  useLanes: boolean,
+): RouteLabelPlacement | null {
+  const longest = longestRouteSegment(points);
+
+  if (longest === null) {
+    return null;
+  }
+
+  const quarterTurn =
+    Math.abs(longest.end.z - longest.start.z) >
+    Math.abs(longest.end.x - longest.start.x);
+
+  return {
+    position: positionRouteLabel(
+      longest,
+      quarterTurn,
+      connectionLabelSlot(connectionId),
+      useLanes,
+    ),
+    quarterTurn,
+  };
+}
+
+function addRouteLabel(
+  root: ThreeGroup,
+  route: BasicConnectionRoute,
+  points: readonly Vector3[],
+  treatment: RouteTreatment,
+): void {
+  if (route.label.length === 0) {
+    return;
+  }
+
+  const placement = routeLabelPlacement(
+    route.connectionId,
+    points,
+    route.styleKey === "supporting" || route.styleKey === "telemetry",
+  );
+
+  root.userData.routeLabel = {
+    rendering: "world-space",
+    text: route.label,
+  };
+
+  if (placement === null) {
+    return;
+  }
+
+  const texture = createRouteLabelTexture(route.label, treatment.labelColor);
+
+  if (texture === null) {
+    return;
+  }
+
+  const textureAspect =
+    (texture.image as HTMLCanvasElement).width /
+    (texture.image as HTMLCanvasElement).height;
+  const labelWidth = ROUTE_LABEL_WORLD_HEIGHT * textureAspect;
+  const label = addMesh(
+    root,
+    new PlaneGeometry(labelWidth, ROUTE_LABEL_WORLD_HEIGHT),
+    new MeshBasicMaterial({
+      depthWrite: false,
+      map: texture,
+      toneMapped: false,
+      transparent: true,
+    }),
+    [placement.position.x, placement.position.y, placement.position.z],
+  );
+  label.name = "Route Label";
+  label.rotation.x = -Math.PI / 2;
+  label.userData.labelBounds = {
+    depth: placement.quarterTurn ? labelWidth : ROUTE_LABEL_WORLD_HEIGHT,
+    width: placement.quarterTurn ? ROUTE_LABEL_WORLD_HEIGHT : labelWidth,
+  };
+  label.userData.labelOrigin = {
+    x: placement.position.x,
+    z: placement.position.z,
+  };
+  label.userData.labelRole = "connection";
+  label.userData.labelShiftAxis = placement.quarterTurn ? "x" : "z";
+
+  if (placement.quarterTurn) {
+    label.rotateZ(Math.PI / 2);
+  }
+
+  label.userData.text = route.label;
 }
 
 export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
@@ -173,13 +707,13 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
   const points = route.points.map(
     (point) => new Vector3(point.x, 0.16, point.z),
   );
-  const color = routeColor(route);
+  const treatment = routeTreatment(route);
   const material = new MeshStandardMaterial({
-    color,
-    emissive: color,
-    emissiveIntensity: 0.28,
-    metalness: 0.25,
-    roughness: 0.4,
+    color: treatment.color,
+    emissive: treatment.color,
+    emissiveIntensity: treatment.emissiveIntensity,
+    metalness: treatment.metalness,
+    roughness: treatment.roughness,
   });
 
   for (let index = 1; index < points.length; index += 1) {
@@ -193,7 +727,12 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
     const direction = end.clone().sub(start);
     const segment = addMesh(
       root,
-      new CylinderGeometry(0.052, 0.052, direction.length(), 10),
+      new CylinderGeometry(
+        treatment.radius,
+        treatment.radius,
+        direction.length(),
+        10,
+      ),
       material,
       [(start.x + end.x) / 2, (start.y + end.y) / 2, (start.z + end.z) / 2],
     );
@@ -204,11 +743,12 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
     );
 
     if (index < points.length - 1) {
-      addMesh(root, new SphereGeometry(0.054, 10, 10), material, [
-        end.x,
-        end.y,
-        end.z,
-      ]);
+      addMesh(
+        root,
+        new SphereGeometry(treatment.radius * 1.04, 10, 10),
+        material,
+        [end.x, end.y, end.z],
+      );
     }
   }
 
@@ -228,6 +768,8 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
       last.clone().sub(beforeLast),
       material,
       "Forward Arrow",
+      treatment.arrowRadius,
+      treatment.arrowHeight,
     );
   }
 
@@ -242,9 +784,12 @@ export function createConnectionRoute(route: BasicConnectionRoute): ThreeGroup {
       first.clone().sub(second),
       material,
       "Backward Arrow",
+      treatment.arrowRadius,
+      treatment.arrowHeight,
     );
   }
 
+  addRouteLabel(root, route, points, treatment);
   root.name = `Connection ${route.connectionId}`;
   return root;
 }

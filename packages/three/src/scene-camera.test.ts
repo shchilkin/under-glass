@@ -53,6 +53,15 @@ describe("Opening View camera", () => {
     expect(camera.up.z).toBeCloseTo(0, 6);
   });
 
+  it("zooms out on portrait containers instead of cropping the authored span", () => {
+    const camera = createOpeningViewCamera();
+
+    applyOpeningView(camera, openingView, "top", 600, 1_200);
+
+    expect(camera.right - camera.left).toBe(12);
+    expect(camera.top - camera.bottom).toBe(24);
+  });
+
   it("orbits between the exact canonical poses without changing center or radius", () => {
     const poses = deriveOpeningViewCameraPoses(openingView);
     const animated = createOpeningViewCamera();
