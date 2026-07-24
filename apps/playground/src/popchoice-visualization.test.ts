@@ -123,11 +123,20 @@ describe("canonical PopChoice Visualization", () => {
 
   it("derives deterministic orthogonal routes for every Connection", () => {
     const routes = routeBasicConnections(POPCHOICE_VISUALIZATION, new Map());
+    const routesById = new Map(
+      routes.map((route) => [route.connectionId, route] as const),
+    );
 
     expect(routeBasicConnections(POPCHOICE_VISUALIZATION, new Map())).toEqual(
       routes,
     );
     expect(routes).toHaveLength(EXPECTED_CONNECTIONS.length);
+    expect(routesById.get("workers-openai")?.targetPort).not.toEqual(
+      routesById.get("movie-discovery-openai")?.targetPort,
+    );
+    expect(routesById.get("workers-tmdb")?.targetPort).not.toEqual(
+      routesById.get("movie-discovery-tmdb")?.targetPort,
+    );
 
     for (const route of routes) {
       for (let index = 1; index < route.points.length; index += 1) {

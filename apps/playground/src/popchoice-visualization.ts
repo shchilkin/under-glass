@@ -91,7 +91,7 @@ export const POPCHOICE_VISUALIZATION: Visualization = parseVisualization({
       id: "openai-api",
       label: "OpenAI API",
       assetId: "provider-asset",
-      position: { x: 5.75, z: -6 },
+      position: { x: 5.75, z: -6.5 },
       quarterTurns: 0,
     },
     {
