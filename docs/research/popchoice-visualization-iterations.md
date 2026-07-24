@@ -178,6 +178,30 @@ What did not carry forward:
 - Screen-space Node labels were crisp and stable, but they visually detached from the diagram during camera motion.
 - Treating Node labels as fixed collision obstacles made dense views brittle, so they receive deterministic placement before lower-priority Connection captions.
 
+### 9. Establish spatial rhythm and dense-view fallback
+
+What changed:
+
+- Recommendation and Operations now use aligned Node rows or columns, at least one world unit of interior Group padding, and at least 1.5 world units between Group regions.
+- The focused Recommendation flow uses a four-unit Node rhythm and wider gutters between Runtime, Data, and Providers.
+- The Viewer projects world-space label bounds into screen space for the current camera pose.
+- At ordinary desktop widths Node and Group labels remain protected while conflicting Connection captions yield.
+- Compact containers use deterministic progressive disclosure in the order Node, Group, Connection.
+- Portrait camera projection preserves the authored horizontal span by zooming out instead of cropping it.
+- The scene exposes the number of visually hidden labels as renderer diagnostics while semantic HTML retains every label.
+
+What this fixes:
+
+- Models no longer look casually distributed inside their regions.
+- Group regions read as separate systems instead of adjacent colored patches.
+- Isometric compression and smaller containers no longer collapse every caption into one unreadable cluster.
+
+What remains for an Editor:
+
+- Authoring positions, alignment constraints, manual route anchors, and intentional exceptions.
+- Reflowing the graph itself when a user chooses a new composition.
+- Selecting explicit importance when two Nodes cannot both remain visible.
+
 ## Current decisions
 
 - The default PopChoice preset is `Recommendation`.
@@ -186,6 +210,8 @@ What did not carry forward:
 - Layout, grouping, visible labels, and Opening View belong to a preset view.
 - Group names, Node names, and Connection captions use world-space typography.
 - The HTML overlay is semantic-only for all label types.
+- The Viewer may hide lower-priority visual labels for the current camera pose, but never mutates authored geometry.
+- Editor-authored layout and Viewer-side decluttering are separate responsibilities.
 - The public API continues to accept one concrete `Visualization`.
 - A public Source Graph or View abstraction remains deferred until more real projects validate the pattern.
 - Realtime collaboration, version history, free camera, and editor work remain outside this prototype.

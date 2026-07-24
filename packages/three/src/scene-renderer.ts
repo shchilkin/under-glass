@@ -66,6 +66,7 @@ import {
   createNodeLabel,
   updateInfiniteGrid,
 } from "./scene-graph.js";
+import { declutterWorldSpaceLabels } from "./screen-label-declutter.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
 import { layoutWorldSpaceLabels } from "./world-label-layout.js";
 import type {
@@ -157,6 +158,14 @@ function renderSurface(surface: RenderingSurface): void {
       object.scale.setScalar(nodeLabelScale);
     }
   });
+  const hiddenLabelCount = declutterWorldSpaceLabels(
+    surface.scene,
+    surface.camera,
+    Math.max(1, surface.container.clientWidth),
+    Math.max(1, surface.container.clientHeight),
+  );
+  surface.container.dataset.underGlassHiddenLabelCount =
+    String(hiddenLabelCount);
   surface.webGlRenderer.render(surface.scene, surface.camera);
   surface.labels.render(surface.camera);
 }

@@ -259,6 +259,10 @@ test("renders the focused PopChoice views and both camera modes", async ({
     "data-under-glass-camera-mode",
     "isometric",
   );
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-hidden-label-count",
+    /^\d+$/,
+  );
   const canvas = page.locator("canvas[data-under-glass-renderer]");
   const isometricPixels = await canvas.screenshot();
 
@@ -311,6 +315,31 @@ test("renders the focused PopChoice views and both camera modes", async ({
   const operationsPixels = await canvas.screenshot();
 
   expect(operationsPixels.equals(isometricPixels)).toBe(false);
+});
+
+test("declutters world-space labels in a compact viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 640, height: 800 });
+  await page.goto("/");
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      Number(
+        (await scene.getAttribute("data-under-glass-hidden-label-count")) ?? 0,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
+  );
+  await expect(
+    page.locator('[data-under-glass-label="connection"]'),
+  ).toHaveCount(7);
 });
 
 test("retargets an active Camera Mode Transition to the latest requested mode", async ({

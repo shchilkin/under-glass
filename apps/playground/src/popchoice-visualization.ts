@@ -343,16 +343,16 @@ const RECOMMENDATION_VIEW: PopChoiceViewSpec = {
   label: "Recommendation",
   description: "Request → recommendation result",
   nodes: [
-    { id: "browser", position: { x: -8, z: 0 } },
+    { id: "browser", position: { x: -9.5, z: 0 } },
     {
       id: "web",
       groupId: "recommendation-runtime",
-      position: { x: -5, z: 0 },
+      position: { x: -6, z: 0 },
     },
     {
       id: "redis",
       groupId: "recommendation-runtime",
-      position: { x: -2, z: 0 },
+      position: { x: -2.5, z: 0 },
     },
     {
       id: "workers",
@@ -362,36 +362,36 @@ const RECOMMENDATION_VIEW: PopChoiceViewSpec = {
     {
       id: "postgres",
       groupId: "recommendation-data",
-      position: { x: 5, z: 0 },
+      position: { x: 6, z: 0 },
     },
     {
       id: "openai-api",
       groupId: "recommendation-providers",
-      position: { x: 1, z: 4 },
+      position: { x: 1, z: 5 },
     },
     {
       id: "tmdb-api",
       groupId: "recommendation-providers",
-      position: { x: 5, z: 4 },
+      position: { x: 6, z: 5 },
     },
   ],
   groups: [
     {
       id: "recommendation-runtime",
       label: "Recommendation Runtime",
-      bounds: { minX: -6.4, minZ: -3.4, maxX: 2.4, maxZ: 1.5 },
+      bounds: { minX: -7.5, minZ: -3.6, maxX: 2.5, maxZ: 1.6 },
       styleKey: "runtime",
     },
     {
       id: "recommendation-data",
       label: "Data",
-      bounds: { minX: 3.6, minZ: -3.4, maxX: 6.4, maxZ: 1.5 },
+      bounds: { minX: 4.3, minZ: -3.6, maxX: 7.7, maxZ: 1.6 },
       styleKey: "data",
     },
     {
       id: "recommendation-providers",
       label: "AI & Content Providers",
-      bounds: { minX: -0.4, minZ: 1.7, maxX: 6.4, maxZ: 5.5 },
+      bounds: { minX: -0.5, minZ: 3.1, maxX: 7.7, maxZ: 6.8 },
       styleKey: "external",
     },
   ],
@@ -403,24 +403,24 @@ const RECOMMENDATION_VIEW: PopChoiceViewSpec = {
     {
       id: "web-postgres",
       routeAnchors: [
-        { id: "query-lane-start", position: { x: -5, z: -1.6 } },
-        { id: "query-lane-end", position: { x: 5, z: -1.6 } },
+        { id: "query-lane-start", position: { x: -6, z: -2 } },
+        { id: "query-lane-end", position: { x: 6, z: -2 } },
       ],
     },
     { id: "workers-openai" },
     {
       id: "workers-tmdb",
       routeAnchors: [
-        { id: "metadata-lane-start", position: { x: 1, z: 2 } },
-        { id: "metadata-lane-end", position: { x: 5, z: 2 } },
+        { id: "metadata-lane-start", position: { x: 1, z: 2.35 } },
+        { id: "metadata-lane-end", position: { x: 6, z: 2.35 } },
       ],
     },
   ],
   openingView: {
     cameraMode: "isometric",
     quarterTurns: 0,
-    center: { x: -1, z: 1.25 },
-    groundSpan: 11,
+    center: { x: -0.8, z: 1.5 },
+    groundSpan: 12.5,
   },
 };
 
@@ -432,17 +432,17 @@ const OPERATIONS_VIEW: PopChoiceViewSpec = {
     {
       id: "backoffice",
       groupId: "operations-tools",
-      position: { x: -7, z: -3 },
+      position: { x: -8, z: -3.5 },
     },
     {
       id: "bull-board",
       groupId: "operations-tools",
-      position: { x: -7, z: 0 },
+      position: { x: -8, z: 0 },
     },
     {
       id: "movie-discovery",
       groupId: "operations-tools",
-      position: { x: -7, z: 3 },
+      position: { x: -8, z: 3.5 },
     },
     {
       id: "redis",
@@ -457,63 +457,63 @@ const OPERATIONS_VIEW: PopChoiceViewSpec = {
     {
       id: "openai-api",
       groupId: "operations-external",
-      position: { x: 7, z: -2 },
+      position: { x: 7.5, z: -2 },
     },
     {
       id: "tmdb-api",
       groupId: "operations-external",
-      position: { x: 7, z: 2 },
+      position: { x: 7.5, z: 2 },
     },
     {
       id: "web",
       groupId: "operations-signals",
-      position: { x: -2, z: 6 },
+      position: { x: -2, z: 6.5 },
     },
     {
       id: "workers",
       groupId: "operations-signals",
-      position: { x: 2, z: 6 },
+      position: { x: 2, z: 6.5 },
     },
     {
       id: "telemetry-stack",
       groupId: "operations-observability",
-      position: { x: 6, z: 6 },
+      position: { x: 6.5, z: 6.5 },
     },
     {
       id: "grafana",
       groupId: "operations-observability",
-      position: { x: 10, z: 6 },
+      position: { x: 10.5, z: 6.5 },
     },
   ],
   groups: [
     {
       id: "operations-tools",
       label: "Operations",
-      bounds: { minX: -9.1, minZ: -5, maxX: -4.9, maxZ: 4.4 },
+      bounds: { minX: -10, minZ: -5.5, maxX: -6, maxZ: 5 },
       styleKey: "operations",
     },
     {
       id: "operations-platform",
       label: "Platform Data",
-      bounds: { minX: -3.4, minZ: -2.4, maxX: 3.4, maxZ: 1.6 },
+      bounds: { minX: -3.5, minZ: -2.7, maxX: 3.5, maxZ: 2 },
       styleKey: "data",
     },
     {
       id: "operations-external",
       label: "Providers",
-      bounds: { minX: 4.9, minZ: -4, maxX: 9.1, maxZ: 3.4 },
+      bounds: { minX: 5.5, minZ: -4, maxX: 9.5, maxZ: 3.2 },
       styleKey: "external",
     },
     {
       id: "operations-signals",
       label: "Runtime Signals",
-      bounds: { minX: -3.4, minZ: 3.6, maxX: 3.4, maxZ: 7.4 },
+      bounds: { minX: -3.5, minZ: 3.5, maxX: 3.5, maxZ: 8.2 },
       styleKey: "runtime",
     },
     {
       id: "operations-observability",
       label: "Observability",
-      bounds: { minX: 4.6, minZ: 3.6, maxX: 11.4, maxZ: 7.4 },
+      bounds: { minX: 5, minZ: 4.7, maxX: 12, maxZ: 8.2 },
       styleKey: "observability",
     },
   ],
@@ -532,8 +532,8 @@ const OPERATIONS_VIEW: PopChoiceViewSpec = {
   openingView: {
     cameraMode: "isometric",
     quarterTurns: 0,
-    center: { x: 1.5, z: 1.5 },
-    groundSpan: 14,
+    center: { x: 1, z: 1.3 },
+    groundSpan: 15.5,
   },
 };
 

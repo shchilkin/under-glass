@@ -68,6 +68,23 @@ function expectValidProjection(visualization: Visualization): void {
   }
 }
 
+function groundGap(
+  first: Visualization["groups"][number],
+  second: Visualization["groups"][number],
+): number {
+  const xGap = Math.max(
+    0,
+    second.bounds.minX - first.bounds.maxX,
+    first.bounds.minX - second.bounds.maxX,
+  );
+  const zGap = Math.max(
+    0,
+    second.bounds.minZ - first.bounds.maxZ,
+    first.bounds.minZ - second.bounds.maxZ,
+  );
+  return Math.max(xGap, zGap);
+}
+
 describe("PopChoice preset views", () => {
   it("projects one runtime model into two purpose-specific Visualizations", () => {
     expect(DEFAULT_POPCHOICE_VIEW_ID).toBe("recommendation");
@@ -123,8 +140,8 @@ describe("PopChoice preset views", () => {
     expect(visualization.openingView).toEqual({
       cameraMode: "isometric",
       quarterTurns: 0,
-      center: { x: -1, z: 1.25 },
-      groundSpan: 11,
+      center: { x: -0.8, z: 1.5 },
+      groundSpan: 12.5,
     });
   });
 
@@ -157,6 +174,46 @@ describe("PopChoice preset views", () => {
   it("keeps every projection self-contained and spatially valid", () => {
     for (const id of POPCHOICE_VIEW_IDS) {
       expectValidProjection(POPCHOICE_VIEWS[id].visualization);
+    }
+  });
+
+  it("keeps authored padding inside Groups and visible gutters between them", () => {
+    for (const id of POPCHOICE_VIEW_IDS) {
+      const visualization = POPCHOICE_VIEWS[id].visualization;
+      const groupsById = new Map(
+        visualization.groups.map((group) => [group.id, group] as const),
+      );
+
+      for (const node of visualization.nodes) {
+        if (node.groupId === undefined) {
+          continue;
+        }
+
+        const bounds = groupsById.get(node.groupId)!.bounds;
+        expect(node.position.x - bounds.minX).toBeGreaterThanOrEqual(1);
+        expect(bounds.maxX - node.position.x).toBeGreaterThanOrEqual(1);
+        expect(node.position.z - bounds.minZ).toBeGreaterThanOrEqual(1);
+        expect(bounds.maxZ - node.position.z).toBeGreaterThanOrEqual(1);
+      }
+
+      for (
+        let firstIndex = 0;
+        firstIndex < visualization.groups.length;
+        firstIndex += 1
+      ) {
+        for (
+          let secondIndex = firstIndex + 1;
+          secondIndex < visualization.groups.length;
+          secondIndex += 1
+        ) {
+          expect(
+            groundGap(
+              visualization.groups[firstIndex]!,
+              visualization.groups[secondIndex]!,
+            ),
+          ).toBeGreaterThanOrEqual(1.5);
+        }
+      }
     }
   });
 
