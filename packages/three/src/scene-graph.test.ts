@@ -5,6 +5,7 @@ import {
   LineLoop,
   LineSegments,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   type Object3D,
 } from "three";
@@ -17,6 +18,7 @@ import {
   createGroupSurface,
   createInfiniteGrid,
   createNodeLabel,
+  createNodeSelectionIndicator,
   DEFAULT_SCENE_THEME,
   updateInfiniteGrid,
 } from "./scene-graph.js";
@@ -131,6 +133,36 @@ describe("project graph presentation", () => {
       rendering: "world-space",
       text: "API",
     });
+  });
+
+  it("adds a deterministic Scene Theme treatment for selected and invalid Nodes", () => {
+    const selected = createNodeSelectionIndicator(
+      "web",
+      { minX: -1, minZ: -0.5, maxX: 1, maxZ: 0.5 },
+      true,
+    );
+    const invalid = createNodeSelectionIndicator(
+      "web",
+      { minX: -1, minZ: -0.5, maxX: 1, maxZ: 0.5 },
+      false,
+    );
+
+    expect(selected.userData.nodeSelection).toEqual({
+      nodeId: "web",
+      valid: true,
+    });
+    expect(
+      (
+        meshNamed(selected, "Node Selection Surface")
+          .material as MeshBasicMaterial
+      ).color.getHex(),
+    ).toBe(DEFAULT_SCENE_THEME.selection);
+    expect(
+      (
+        meshNamed(invalid, "Node Selection Surface")
+          .material as MeshBasicMaterial
+      ).color.getHex(),
+    ).toBe(DEFAULT_SCENE_THEME.invalidPlacement);
   });
 
   it("maps host-defined Group Style Keys to distinct quiet regions", () => {

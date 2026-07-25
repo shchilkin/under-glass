@@ -10,5 +10,8 @@ export {
   type SceneRendererDiagnosticCode,
   type SceneRendererSnapshot,
   type SceneRendererStatus,
+  type SceneNodeInteraction,
+  type SceneNodePreview,
+  type ScenePointer,
   type SetCameraModeOptions,
 } from "./types.js";

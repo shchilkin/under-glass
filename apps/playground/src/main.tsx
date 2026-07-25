@@ -8,12 +8,13 @@ import {
   type Visualization,
 } from "@under-glass/core";
 import {
-  createViewerController,
+  createEditorController,
   type CameraMotion,
+  type EditorController,
+  type EditorSnapshot,
   type ResolvedAsset,
   type SceneRendererStatus,
   type ViewerAccessibility,
-  type ViewerController,
   type ViewerSnapshot,
 } from "@under-glass/web";
 import {
@@ -217,7 +218,7 @@ async function resolveAliasedDemoAsset(
 async function resolvePlaygroundAsset(assetId: string): Promise<ResolvedAsset> {
   if (assetId === "slow-system") {
     await new Promise((resolve) => {
-      window.setTimeout(resolve, 1_000);
+      window.setTimeout(resolve, 3_000);
     });
     return resolveAliasedDemoAsset(assetId);
   }
@@ -269,9 +270,14 @@ function createDemoVisualization(): Visualization {
 
 const fallbackVisualization = createDemoVisualization();
 
-function loadingSnapshot(visualization: Visualization): ViewerSnapshot {
+function loadingSnapshot(visualization: Visualization): EditorSnapshot {
   return {
+    canRedo: false,
+    canUndo: false,
     diagnostics: [],
+    dragPreview: null,
+    gridStep: 1,
+    selectedNodeId: null,
     status: "loading",
     visualization,
   };
@@ -537,16 +543,147 @@ function RendererDiagnostics({ diagnostics }: RendererDiagnosticsProps) {
   );
 }
 
+interface EditorControlsProps {
+  readonly snapshot: EditorSnapshot;
+  readonly onGridStepChange: (gridStep: number | null) => void;
+  readonly onRedo: () => void;
+  readonly onUndo: () => void;
+}
+
+function placementStateFor(snapshot: EditorSnapshot): string | null {
+  if (snapshot.dragPreview === null) {
+    return null;
+  }
+
+  if (snapshot.dragPreview.valid) {
+    return "Valid position";
+  }
+
+  return `Blocked by ${snapshot.dragPreview.conflictingNodeIds.join(", ")}`;
+}
+
+function nodePositionFor(
+  node: EditorSnapshot["visualization"]["nodes"][number] | undefined,
+): string {
+  if (node === undefined) {
+    return "—";
+  }
+
+  return `${node.position.x}, ${node.position.z}`;
+}
+
+function EditorSelection({ snapshot }: Pick<EditorControlsProps, "snapshot">) {
+  const selectedNode = snapshot.visualization.nodes.find(
+    (node) => node.id === snapshot.selectedNodeId,
+  );
+  const placementState = placementStateFor(snapshot);
+
+  return (
+    <p className="editor-selection" aria-live="polite">
+      <span className="control-label">Selection</span>
+      <strong>{selectedNode?.label ?? "None"}</strong>
+      <span data-testid="selected-node-position">
+        {nodePositionFor(selectedNode)}
+      </span>
+      {placementState === null ? null : (
+        <span className="placement-state">{placementState}</span>
+      )}
+    </p>
+  );
+}
+
+function GridSnapControls({
+  onGridStepChange,
+  snapshot,
+}: Pick<EditorControlsProps, "onGridStepChange" | "snapshot">) {
+  return (
+    <div aria-label="Grid snapping" className="snap-options">
+      <button
+        aria-pressed={snapshot.gridStep === 1}
+        onClick={() => onGridStepChange(1)}
+        type="button"
+      >
+        Snap 1
+      </button>
+      <button
+        aria-pressed={snapshot.gridStep === null}
+        onClick={() => onGridStepChange(null)}
+        type="button"
+      >
+        Free
+      </button>
+    </div>
+  );
+}
+
+function HistoryControls({
+  onRedo,
+  onUndo,
+  snapshot,
+}: Pick<EditorControlsProps, "onRedo" | "onUndo" | "snapshot">) {
+  return (
+    <>
+      <button disabled={!snapshot.canUndo} onClick={onUndo} type="button">
+        Undo
+      </button>
+      <button disabled={!snapshot.canRedo} onClick={onRedo} type="button">
+        Redo
+      </button>
+    </>
+  );
+}
+
+function EditorControls(props: EditorControlsProps) {
+  return (
+    <div aria-label="Editor controls" className="editor-controls">
+      <EditorSelection snapshot={props.snapshot} />
+      <div className="editor-actions">
+        <GridSnapControls
+          onGridStepChange={props.onGridStepChange}
+          snapshot={props.snapshot}
+        />
+        <HistoryControls
+          onRedo={props.onRedo}
+          onUndo={props.onUndo}
+          snapshot={props.snapshot}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface PlaygroundTitleProps {
+  readonly presentation: ReturnType<typeof presentationForScenario>;
+  readonly showPopChoiceVisualization: boolean;
+}
+
+function PlaygroundTitle({
+  presentation,
+  showPopChoiceVisualization,
+}: PlaygroundTitleProps) {
+  return (
+    <div className="app-title">
+      <p className="eyebrow">Under Glass</p>
+      <h1>
+        {showPopChoiceVisualization ? "PopChoice architecture" : "Under Glass"}
+      </h1>
+      <p className="lede">{presentation.lede}</p>
+    </div>
+  );
+}
+
 function App() {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
-  const controllerRef = useRef<ViewerController | null>(null);
+  const controllerRef = useRef<EditorController | null>(null);
   const [popChoiceViewId, setPopChoiceViewId] =
     useState<PopChoiceViewId>(initialPopChoiceView);
   const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
-  const visualization = showPopChoiceVisualization
-    ? activePopChoiceView.visualization
-    : fallbackVisualization;
-  const [snapshot, setSnapshot] = useState<ViewerSnapshot>(() =>
+  const [visualization, setVisualization] = useState<Visualization>(() =>
+    showPopChoiceVisualization
+      ? activePopChoiceView.visualization
+      : fallbackVisualization,
+  );
+  const [snapshot, setSnapshot] = useState<EditorSnapshot>(() =>
     loadingSnapshot(visualization),
   );
   const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
@@ -568,10 +705,14 @@ function App() {
     setStatusHistory([]);
     setAssetResolveCount(0);
 
-    const controller = createViewerController({
+    const controller = createEditorController({
       accessibility: VIEWER_ACCESSIBILITY,
       cameraMotion,
       container,
+      gridStep: 1,
+      onOperation: (event) => {
+        setVisualization(event.visualization);
+      },
       resolveAsset: async (assetId) => {
         setAssetResolveCount((count) => count + 1);
         return resolvePlaygroundAsset(assetId);
@@ -642,6 +783,7 @@ function App() {
     );
     setCameraMode(nextView.visualization.openingView.cameraMode);
     setPopChoiceViewId(viewId);
+    setVisualization(nextView.visualization);
   };
   const presentation = presentationForScenario(
     showPopChoiceVisualization,
@@ -656,15 +798,10 @@ function App() {
   return (
     <main className={presentation.className}>
       <header className="app-header">
-        <div className="app-title">
-          <p className="eyebrow">Under Glass</p>
-          <h1>
-            {showPopChoiceVisualization
-              ? "PopChoice architecture"
-              : "Under Glass"}
-          </h1>
-          <p className="lede">{presentation.lede}</p>
-        </div>
+        <PlaygroundTitle
+          presentation={presentation}
+          showPopChoiceVisualization={showPopChoiceVisualization}
+        />
         <SceneControls
           cameraMode={cameraMode}
           cameraMotion={cameraMotion}
@@ -684,6 +821,20 @@ function App() {
           className="scene"
           ref={sceneContainerRef}
         />
+        {showPopChoiceVisualization ? (
+          <EditorControls
+            onGridStepChange={(gridStep) =>
+              controllerRef.current?.setGridStep(gridStep)
+            }
+            onRedo={() => {
+              controllerRef.current?.redo();
+            }}
+            onUndo={() => {
+              controllerRef.current?.undo();
+            }}
+            snapshot={snapshot}
+          />
+        ) : null}
       </div>
       <aside className="scene-meta">
         <SceneMetrics

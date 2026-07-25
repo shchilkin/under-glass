@@ -5,6 +5,30 @@ export {
 } from "./basic-routing.js";
 
 export {
+  createEditorOperationHistory,
+  type CreateEditorOperationHistoryOptions,
+  type EditorHistorySnapshot,
+  type EditorHistoryTransition,
+  type EditorOperationHistory,
+} from "./editor-history.js";
+
+export {
+  applyMoveNodeOperation,
+  invertMoveNodeOperation,
+  type MoveNodeOperation,
+} from "./editor-operation.js";
+
+export {
+  assertValidGridStep,
+  evaluateNodePlacement,
+  snapGroundPoint,
+  type EvaluateNodePlacementOptions,
+  type NodePlacementPreview,
+} from "./editor-placement.js";
+
+export { groundPointsEqual } from "./geometry.js";
+
+export {
   ASSET_DEFINITION_SCHEMA_VERSION,
   assetDefinitionSchema,
   parseAssetDefinition,

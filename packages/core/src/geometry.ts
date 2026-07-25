@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+import type { GroundPoint } from "./visualization.js";
+
+export function groundPointsEqual(
+  first: GroundPoint,
+  second: GroundPoint,
+): boolean {
+  return first.x === second.x && first.z === second.z;
+}
+
 export const groundCoordinatesSchema: z.ZodObject<
   {
     x: z.ZodNumber;

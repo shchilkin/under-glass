@@ -15,16 +15,42 @@ const visuallyHiddenStyles: Partial<CSSStyleDeclaration> = {
   width: "1px",
 };
 
+const focusedControlStyles: Partial<CSSStyleDeclaration> = {
+  background: "rgba(8, 16, 14, 0.97)",
+  border: "1px solid rgba(183, 236, 207, 0.32)",
+  borderRadius: "0.75rem",
+  clip: "auto",
+  clipPath: "none",
+  color: "#dce8e2",
+  height: "auto",
+  left: "0.75rem",
+  margin: "0",
+  maxHeight: "min(28rem, calc(100% - 1.5rem))",
+  overflow: "auto",
+  padding: "0.75rem 1rem",
+  position: "absolute",
+  top: "0.75rem",
+  whiteSpace: "normal",
+  width: "min(22rem, calc(100% - 1.5rem))",
+  zIndex: "3",
+};
+
 export interface ViewerSemanticLayer {
   dispose(): void;
   setGraph(graph: ViewerSemanticGraph): void;
   setRendererSnapshot(snapshot: SceneRendererSnapshot): void;
+  setSelectedNodeId(nodeId: string | null): void;
 }
 
 export type ViewerSemanticLayerFactory = (
   container: HTMLElement,
   graph: ViewerSemanticGraph,
+  options?: ViewerSemanticLayerOptions,
 ) => ViewerSemanticLayer;
+
+export interface ViewerSemanticLayerOptions {
+  readonly onNodeActivate?: (nodeId: string) => void;
+}
 
 function appendListItem(
   document: Document,
@@ -40,7 +66,39 @@ function appendListItem(
   return item;
 }
 
-function renderGraph(root: HTMLElement, graph: ViewerSemanticGraph): void {
+function appendNodeListItem(
+  document: Document,
+  list: HTMLUListElement,
+  node: ViewerSemanticGraph["ungroupedNodes"][number],
+  options: ViewerSemanticLayerOptions,
+  selectedNodeId: string | null,
+): void {
+  const item = document.createElement("li");
+  item.dataset.underGlassSemanticNode = node.id;
+
+  if (options.onNodeActivate === undefined) {
+    item.textContent = node.label;
+  } else {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = node.label;
+    button.dataset.underGlassSemanticNodeControl = node.id;
+    button.setAttribute("aria-pressed", String(selectedNodeId === node.id));
+    button.addEventListener("click", () => {
+      options.onNodeActivate?.(node.id);
+    });
+    item.append(button);
+  }
+
+  list.append(item);
+}
+
+function renderGraph(
+  root: HTMLElement,
+  graph: ViewerSemanticGraph,
+  options: ViewerSemanticLayerOptions,
+  selectedNodeId: string | null,
+): void {
   const document = root.ownerDocument;
   root.replaceChildren();
   root.setAttribute("aria-label", graph.label);
@@ -66,13 +124,7 @@ function renderGraph(root: HTMLElement, graph: ViewerSemanticGraph): void {
       const members = document.createElement("ul");
       members.setAttribute("aria-label", `${group.label} nodes`);
       for (const node of group.nodes) {
-        appendListItem(
-          document,
-          members,
-          node.label,
-          "underGlassSemanticNode",
-          node.id,
-        );
+        appendNodeListItem(document, members, node, options, selectedNodeId);
       }
       groupItem.append(members);
     }
@@ -86,13 +138,7 @@ function renderGraph(root: HTMLElement, graph: ViewerSemanticGraph): void {
 
     const list = document.createElement("ul");
     for (const node of graph.ungroupedNodes) {
-      appendListItem(
-        document,
-        list,
-        node.label,
-        "underGlassSemanticNode",
-        node.id,
-      );
+      appendNodeListItem(document, list, node, options, selectedNodeId);
     }
     root.append(list);
   }
@@ -129,10 +175,11 @@ function isRendererUnavailable(snapshot: SceneRendererSnapshot): boolean {
   );
 }
 
-export const createViewerSemanticLayer: ViewerSemanticLayerFactory = (
-  container,
-  graph,
-) => {
+export function createViewerSemanticLayer(
+  container: HTMLElement,
+  graph: ViewerSemanticGraph,
+  options: ViewerSemanticLayerOptions = {},
+): ViewerSemanticLayer {
   const document = container.ownerDocument;
   const root = document.createElement("section");
   root.dataset.underGlassSemanticSummary = "";
@@ -166,21 +213,51 @@ export const createViewerSemanticLayer: ViewerSemanticLayerFactory = (
     container.style.position = "relative";
   }
 
-  renderGraph(root, graph);
+  let selectedNodeId: string | null = null;
+  const showKeyboardControls = (): void => {
+    Object.assign(root.style, focusedControlStyles);
+  };
+  const hideKeyboardControls = (event: FocusEvent): void => {
+    if (
+      event.relatedTarget !== null &&
+      root.contains(event.relatedTarget as globalThis.Node)
+    ) {
+      return;
+    }
+
+    root.removeAttribute("style");
+    Object.assign(root.style, visuallyHiddenStyles);
+  };
+  root.addEventListener("focusin", showKeyboardControls);
+  root.addEventListener("focusout", hideKeyboardControls);
+  renderGraph(root, graph, options, selectedNodeId);
   container.append(root, fallback);
 
   return {
     dispose() {
+      root.removeEventListener("focusin", showKeyboardControls);
+      root.removeEventListener("focusout", hideKeyboardControls);
       root.remove();
       fallback.remove();
     },
     setGraph(nextGraph) {
-      renderGraph(root, nextGraph);
+      renderGraph(root, nextGraph, options, selectedNodeId);
     },
     setRendererSnapshot(snapshot) {
       const unavailable = isRendererUnavailable(snapshot);
       fallback.hidden = !unavailable;
       fallback.style.display = unavailable ? "flex" : "none";
     },
+    setSelectedNodeId(nodeId) {
+      selectedNodeId = nodeId;
+      for (const button of root.querySelectorAll<HTMLButtonElement>(
+        "[data-under-glass-semantic-node-control]",
+      )) {
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.underGlassSemanticNodeControl === nodeId),
+        );
+      }
+    },
   };
-};
+}

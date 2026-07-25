@@ -71,6 +71,7 @@ export function createViewerControllerWithRenderer(
   createSemanticLayer: ViewerSemanticLayerFactory = createViewerSemanticLayer,
 ): ViewerController {
   let active = true;
+  let cameraMode = options.visualization.openingView.cameraMode;
   let cameraMotion = options.cameraMotion;
   let visualization = options.visualization;
   let renderer = createRenderer(
@@ -126,9 +127,10 @@ export function createViewerControllerWithRenderer(
     getSnapshot(): ViewerSnapshot {
       return snapshot;
     },
-    setCameraMode(cameraMode, cameraOptions): void {
+    setCameraMode(nextCameraMode, cameraOptions): void {
       if (active) {
-        renderer.setCameraMode(cameraMode, cameraOptions);
+        cameraMode = nextCameraMode;
+        renderer.setCameraMode(nextCameraMode, cameraOptions);
       }
     },
     setCameraMotion(nextCameraMotion): void {
@@ -153,6 +155,9 @@ export function createViewerControllerWithRenderer(
       renderer = createRenderer(
         createRendererOptions(options, visualization, cameraMotion),
       );
+      if (visualization.openingView.cameraMode !== cameraMode) {
+        renderer.setCameraMode(cameraMode, { transition: "immediate" });
+      }
       snapshot = synchronizeRendererSnapshot();
       subscribeToRenderer();
 

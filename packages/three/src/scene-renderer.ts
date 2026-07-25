@@ -18,6 +18,7 @@ import type {
   AssetDefinition,
   BasicConnectionRoute,
   GroundBounds,
+  GroundPoint,
   Node,
   OpeningView,
   Visualization,
@@ -46,6 +47,7 @@ import {
   derivePlacedFootprintGroundBounds,
   updateAssetPlaceholder,
   updateGroundPlane,
+  updatePlacedAsset,
 } from "./scene-layout.js";
 import {
   beginCameraModeTransition,
@@ -64,8 +66,14 @@ import {
   createGroupSurface,
   createInfiniteGrid,
   createNodeLabel,
+  createNodeSelectionIndicator,
   updateInfiniteGrid,
 } from "./scene-graph.js";
+import {
+  hitTestNodeAtPointer,
+  projectPointerToGround,
+  type SceneViewport,
+} from "./scene-interaction.js";
 import { declutterWorldSpaceLabels } from "./screen-label-declutter.js";
 import { createSceneStateStore, type SceneStateStore } from "./scene-state.js";
 import { layoutWorldSpaceLabels } from "./world-label-layout.js";
@@ -74,6 +82,9 @@ import type {
   CreateSceneRendererOptions,
   SceneRenderer,
   SceneRendererDiagnostic,
+  SceneNodeInteraction,
+  SceneNodePreview,
+  ScenePointer,
   SetCameraModeOptions,
 } from "./types.js";
 
@@ -97,14 +108,17 @@ interface RenderingSurface {
   reducedMotionListener: (() => void) | null;
   readonly resizeObserver: ResizeObserver;
   readonly scene: Scene;
+  readonly selectionLayer: Group;
   readonly webGlRenderer: WebGLRenderer;
 }
 
 interface RendererSession {
   readonly assetDefinitionsByNode: Map<string, AssetDefinition>;
   readonly assets: AssetSession;
-  readonly footprintsByNode: Map<string, GroundBounds>;
+  readonly nodeLabels: Map<string, Object3D>;
+  readonly nodeObjects: Map<string, Object3D>;
   readonly placeholders: Map<string, Mesh>;
+  interaction: SceneNodeInteraction;
   routes: BasicConnectionRoute[];
   disposed: boolean;
   surface: RenderingSurface | null;
@@ -114,6 +128,7 @@ interface NodeLoadContext {
   readonly isDisposed: () => boolean;
   readonly options: CreateSceneRendererOptions;
   readonly session: RendererSession;
+  readonly store: SceneStateStore;
   readonly surface: RenderingSurface;
 }
 
@@ -125,6 +140,7 @@ function addAssetPlaceholders(
   for (const node of nodes) {
     const placeholder = createAssetPlaceholder(node);
     session.placeholders.set(node.id, placeholder);
+    session.nodeObjects.set(node.id, placeholder);
     surface.scene.add(placeholder);
   }
 
@@ -144,6 +160,7 @@ function removeAssetPlaceholder(
 
   surface.scene.remove(placeholder);
   session.placeholders.delete(nodeId);
+  session.nodeObjects.delete(nodeId);
   disposeObjectResources(placeholder);
 }
 
@@ -317,6 +334,7 @@ function createRenderingSurface(
   container: HTMLElement,
   visualization: Visualization,
   cameraMotion: CameraMotion,
+  session: RendererSession,
 ): RenderingSurface {
   const canvas = document.createElement("canvas");
   const webGlRenderer = new WebGLRenderer({
@@ -332,6 +350,7 @@ function createRenderingSurface(
   const groundPlane = createGroundPlane(visualization, new Map());
   const groundGrid = createInfiniteGrid();
   const connectionLayer = new Group();
+  const selectionLayer = new Group();
   const labels = createLabelOverlay(container, visualization);
 
   canvas.dataset.underGlassRenderer = "";
@@ -357,10 +376,14 @@ function createRenderingSurface(
     scene.add(createGroupSurface(group));
   }
 
+  selectionLayer.name = "Node Selection";
+  scene.add(selectionLayer);
   const nodeLabelLayer = new Group();
   nodeLabelLayer.name = "Node Labels";
   for (const node of visualization.nodes) {
-    nodeLabelLayer.add(createNodeLabel(node));
+    const label = createNodeLabel(node);
+    session.nodeLabels.set(node.id, label);
+    nodeLabelLayer.add(label);
   }
   scene.add(nodeLabelLayer);
 
@@ -404,6 +427,7 @@ function createRenderingSurface(
       resizeSurface(surface, container);
     }),
     scene,
+    selectionLayer,
     webGlRenderer,
   };
 
@@ -421,19 +445,207 @@ function createRenderingSurface(
   return surface;
 }
 
+function defaultNodeFootprint(node: Node): GroundBounds {
+  return {
+    minX: node.position.x - 0.5,
+    minZ: node.position.z - 0.5,
+    maxX: node.position.x + 0.5,
+    maxZ: node.position.z + 0.5,
+  };
+}
+
+function nodeAtPosition(node: Node, position: GroundPoint): Node {
+  return {
+    ...node,
+    position,
+  };
+}
+
+function visualizationWithPreview(
+  visualization: Visualization,
+  preview: SceneNodePreview | null,
+): Visualization {
+  if (preview === null) {
+    return visualization;
+  }
+
+  return {
+    ...visualization,
+    nodes: visualization.nodes.map((node) =>
+      node.id === preview.nodeId
+        ? nodeAtPosition(node, preview.position)
+        : node,
+    ),
+  };
+}
+
+function presentationFootprints(
+  visualization: Visualization,
+  session: RendererSession,
+): Map<string, GroundBounds> {
+  const footprints = new Map<string, GroundBounds>();
+
+  for (const node of visualization.nodes) {
+    const definition = session.assetDefinitionsByNode.get(node.id);
+    footprints.set(
+      node.id,
+      definition === undefined
+        ? defaultNodeFootprint(node)
+        : derivePlacedFootprintGroundBounds(node, definition),
+    );
+  }
+
+  return footprints;
+}
+
+function clearObjectLayer(layer: Group): void {
+  for (const child of [...layer.children]) {
+    layer.remove(child);
+    disposeObjectResources(child);
+  }
+}
+
+function updateNodeObjectPresentation(
+  node: Node,
+  session: RendererSession,
+): void {
+  const object = session.nodeObjects.get(node.id);
+
+  if (object === undefined) {
+    return;
+  }
+
+  const definition = session.assetDefinitionsByNode.get(node.id);
+  const placeholder = session.placeholders.get(node.id);
+
+  if (placeholder !== undefined) {
+    if (definition === undefined) {
+      placeholder.position.x = node.position.x;
+      placeholder.position.z = node.position.z;
+    } else {
+      updateAssetPlaceholder(placeholder, node, definition);
+    }
+  } else if (definition !== undefined) {
+    updatePlacedAsset(object, node, definition);
+  }
+}
+
+function updateNodeLabelPresentation(
+  originalNode: Node,
+  presentedNode: Node,
+  session: RendererSession,
+): void {
+  const label = session.nodeLabels.get(originalNode.id);
+
+  if (label !== undefined) {
+    label.position.set(
+      presentedNode.position.x - originalNode.position.x,
+      0,
+      presentedNode.position.z - originalNode.position.z,
+    );
+  }
+}
+
+function updateSelectionPresentation(
+  visualization: Visualization,
+  surface: RenderingSurface,
+  session: RendererSession,
+): void {
+  clearObjectLayer(surface.selectionLayer);
+  const selectedNodeId = session.interaction.selectedNodeId;
+
+  if (selectedNodeId === null) {
+    delete surface.container.dataset.underGlassSelectedNodeId;
+    delete surface.container.dataset.underGlassPlacementValidity;
+    renderSurface(surface);
+    return;
+  }
+
+  const preview = session.interaction.preview;
+  const presentedVisualization = visualizationWithPreview(
+    visualization,
+    preview,
+  );
+  const node = presentedVisualization.nodes.find(
+    (candidate) => candidate.id === selectedNodeId,
+  );
+
+  if (node === undefined) {
+    delete surface.container.dataset.underGlassSelectedNodeId;
+    renderSurface(surface);
+    return;
+  }
+
+  const bounds =
+    presentationFootprints(presentedVisualization, session).get(node.id) ??
+    defaultNodeFootprint(node);
+  const valid =
+    preview === null || preview.nodeId !== selectedNodeId || preview.valid;
+  surface.selectionLayer.add(
+    createNodeSelectionIndicator(node.id, bounds, valid),
+  );
+  surface.container.dataset.underGlassSelectedNodeId = node.id;
+  if (preview !== null && preview.nodeId === selectedNodeId) {
+    surface.container.dataset.underGlassPlacementValidity = valid
+      ? "valid"
+      : "invalid";
+  } else {
+    delete surface.container.dataset.underGlassPlacementValidity;
+  }
+  renderSurface(surface);
+}
+
+function applyNodeInteraction(
+  visualization: Visualization,
+  interaction: SceneNodeInteraction,
+  surface: RenderingSurface,
+  session: RendererSession,
+): void {
+  const previousPreview = session.interaction.preview;
+
+  if (previousPreview !== null) {
+    const originalNode = visualization.nodes.find(
+      (node) => node.id === previousPreview.nodeId,
+    );
+    if (originalNode !== undefined) {
+      updateNodeObjectPresentation(originalNode, session);
+      updateNodeLabelPresentation(originalNode, originalNode, session);
+    }
+  }
+
+  session.interaction = interaction;
+  if (interaction.preview !== null) {
+    const originalNode = visualization.nodes.find(
+      (node) => node.id === interaction.preview?.nodeId,
+    );
+    if (originalNode !== undefined) {
+      const presentedNode = nodeAtPosition(
+        originalNode,
+        interaction.preview.position,
+      );
+      updateNodeObjectPresentation(presentedNode, session);
+      updateNodeLabelPresentation(originalNode, presentedNode, session);
+    }
+  }
+
+  const presentedVisualization = visualizationWithPreview(
+    visualization,
+    interaction.preview,
+  );
+  updateGraphPresentation(presentedVisualization, surface, session);
+  updateSelectionPresentation(visualization, surface, session);
+}
+
 function updateGraphPresentation(
   visualization: Visualization,
   surface: RenderingSurface,
   session: RendererSession,
 ): void {
-  for (const child of [...surface.connectionLayer.children]) {
-    surface.connectionLayer.remove(child);
-    disposeObjectResources(child);
-  }
+  clearObjectLayer(surface.connectionLayer);
 
   session.routes = routeBasicConnections(
     visualization,
-    session.footprintsByNode,
+    presentationFootprints(visualization, session),
   );
 
   for (const route of session.routes) {
@@ -457,10 +669,6 @@ function applyResolvedAssetDefinition(
   context: NodeLoadContext,
 ): void {
   context.session.assetDefinitionsByNode.set(node.id, definition);
-  context.session.footprintsByNode.set(
-    node.id,
-    derivePlacedFootprintGroundBounds(node, definition),
-  );
   const placeholder = context.session.placeholders.get(node.id);
 
   if (placeholder !== undefined) {
@@ -468,10 +676,14 @@ function applyResolvedAssetDefinition(
   }
 
   updateGraphPresentation(
-    context.options.visualization,
+    visualizationWithPreview(
+      context.options.visualization,
+      context.session.interaction.preview,
+    ),
     context.surface,
     context.session,
   );
+  context.store.setSnapshot(context.store.getSnapshot());
 }
 
 async function prepareNodeAsset(
@@ -495,14 +707,17 @@ function completeNodeLoad(
   surface: RenderingSurface,
   session: RendererSession,
 ): void {
+  const preview = session.interaction.preview;
+  const presentedNode =
+    preview?.nodeId === node.id ? nodeAtPosition(node, preview.position) : node;
   removeAssetPlaceholder(node.id, surface, session);
-  surface.scene.add(
-    createPlacedAsset(
-      node,
-      loadedAsset.resolvedAsset.definition,
-      loadedAsset.asset,
-    ),
+  const placedAsset = createPlacedAsset(
+    presentedNode,
+    loadedAsset.resolvedAsset.definition,
+    loadedAsset.asset,
   );
+  session.nodeObjects.set(node.id, placedAsset);
+  surface.scene.add(placedAsset);
   renderSurface(surface);
 }
 
@@ -557,6 +772,7 @@ async function loadNode(
       isDisposed,
       options,
       session,
+      store,
       surface,
     };
     const loadedAsset = await prepareNodeAsset(node, context);
@@ -585,6 +801,8 @@ function disposeSurface(
   surface.webGlRenderer.dispose();
   surface.webGlRenderer.forceContextLoss();
   surface.canvas.remove();
+  delete surface.container.dataset.underGlassSelectedNodeId;
+  delete surface.container.dataset.underGlassPlacementValidity;
 }
 
 function rendererUnavailableDiagnostic(
@@ -693,6 +911,7 @@ function initializeSceneRendering(
     options.container,
     options.visualization,
     options.cameraMotion ?? "responsive",
+    session,
   );
 
   applyRecoverableDiagnostics(diagnostics, store);
@@ -800,15 +1019,57 @@ function setSessionCameraMode(
   updateCameraMode(surface, cameraMode, options);
 }
 
+function sceneViewport(surface: RenderingSurface): SceneViewport {
+  const bounds = surface.canvas.getBoundingClientRect();
+  return {
+    height: Math.max(1, bounds.height),
+    left: bounds.left,
+    top: bounds.top,
+    width: Math.max(1, bounds.width),
+  };
+}
+
+function nodeFootprints(
+  visualization: Visualization,
+  session: RendererSession,
+): ReadonlyMap<string, GroundBounds> {
+  return presentationFootprints(visualization, session);
+}
+
 function createSceneRendererHandle(
   store: SceneStateStore,
   session: RendererSession,
+  options: CreateSceneRendererOptions,
 ): SceneRenderer {
   return {
     dispose(): void {
       disposeRendererSession(store, session);
     },
+    getNodeFootprints(): ReadonlyMap<string, GroundBounds> {
+      return nodeFootprints(options.visualization, session);
+    },
     getSnapshot: store.getSnapshot,
+    hitTestNode(pointer: ScenePointer): string | null {
+      const surface = activeRenderingSurface(session);
+      return surface === null
+        ? null
+        : hitTestNodeAtPointer(
+            surface.camera,
+            [...session.nodeObjects.values()],
+            pointer,
+            sceneViewport(surface),
+          );
+    },
+    projectPointerToGround(pointer: ScenePointer): GroundPoint | null {
+      const surface = activeRenderingSurface(session);
+      return surface === null
+        ? null
+        : projectPointerToGround(
+            surface.camera,
+            pointer,
+            sceneViewport(surface),
+          );
+    },
     setCameraMotion(cameraMotion: CameraMotion): void {
       const surface = session.surface;
 
@@ -821,6 +1082,17 @@ function createSceneRendererHandle(
     },
     setCameraMode(cameraMode: CameraMode, options): void {
       setSessionCameraMode(session, cameraMode, options);
+    },
+    setNodeInteraction(interaction: SceneNodeInteraction): void {
+      const surface = activeRenderingSurface(session);
+      if (surface !== null) {
+        applyNodeInteraction(
+          options.visualization,
+          interaction,
+          surface,
+          session,
+        );
+      }
     },
     subscribe: store.subscribe,
   };
@@ -839,7 +1111,12 @@ export function createSceneRenderer(
       parseAsset: parseGlb,
       resolveAsset: options.resolveAsset,
     }),
-    footprintsByNode: new Map(),
+    interaction: {
+      preview: null,
+      selectedNodeId: null,
+    },
+    nodeLabels: new Map(),
+    nodeObjects: new Map(),
     placeholders: new Map(),
     routes: [],
     disposed: false,
@@ -847,5 +1124,5 @@ export function createSceneRenderer(
   };
 
   session.surface = startSceneRendering(options, store, session);
-  return createSceneRendererHandle(store, session);
+  return createSceneRendererHandle(store, session, options);
 }

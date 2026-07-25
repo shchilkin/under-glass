@@ -1,6 +1,8 @@
 import type {
   AssetDefinition,
   DiagnosticSeverity,
+  GroundBounds,
+  GroundPoint,
   OpeningView,
   Visualization,
 } from "@under-glass/core";
@@ -46,10 +48,30 @@ export interface SetCameraModeOptions {
   readonly transition?: "auto" | "immediate";
 }
 
+export interface ScenePointer {
+  readonly clientX: number;
+  readonly clientY: number;
+}
+
+export interface SceneNodePreview {
+  readonly nodeId: string;
+  readonly position: GroundPoint;
+  readonly valid: boolean;
+}
+
+export interface SceneNodeInteraction {
+  readonly preview: SceneNodePreview | null;
+  readonly selectedNodeId: string | null;
+}
+
 export interface SceneRenderer {
   dispose(): void;
+  getNodeFootprints(): ReadonlyMap<string, GroundBounds>;
   getSnapshot(): SceneRendererSnapshot;
+  hitTestNode(pointer: ScenePointer): string | null;
+  projectPointerToGround(pointer: ScenePointer): GroundPoint | null;
   setCameraMotion(cameraMotion: CameraMotion): void;
+  setNodeInteraction(interaction: SceneNodeInteraction): void;
   setCameraMode(
     cameraMode: OpeningView["cameraMode"],
     options?: SetCameraModeOptions,

@@ -19,7 +19,12 @@ import {
   type OrthographicCamera,
 } from "three";
 
-import type { BasicConnectionRoute, Group, Node } from "@under-glass/core";
+import type {
+  BasicConnectionRoute,
+  GroundBounds,
+  Group,
+  Node,
+} from "@under-glass/core";
 
 import { disposeObjectResources } from "./resource-disposal.js";
 import { deriveViewportGroundBounds } from "./scene-camera.js";
@@ -28,6 +33,7 @@ export const DEFAULT_SCENE_THEME = {
   connection: 0x83d6aa,
   gridMajor: 0xa4b8ae,
   gridMinor: 0x8aa096,
+  invalidPlacement: 0xe96f62,
   groupDataBorder: 0x526e72,
   groupDataSurface: 0x162124,
   groupExternalBorder: 0x766852,
@@ -41,8 +47,58 @@ export const DEFAULT_SCENE_THEME = {
   groupBorder: 0x4c6b5e,
   groupSurface: 0x16211d,
   secondaryConnection: 0xc9816c,
+  selection: 0x8ce3b6,
   supportingConnection: 0x52675e,
 };
+
+export function createNodeSelectionIndicator(
+  nodeId: string,
+  bounds: GroundBounds,
+  valid: boolean,
+): ThreeGroup {
+  const root = new ThreeGroup();
+  const padding = 0.2;
+  const minX = bounds.minX - padding;
+  const minZ = bounds.minZ - padding;
+  const maxX = bounds.maxX + padding;
+  const maxZ = bounds.maxZ + padding;
+  const width = maxX - minX;
+  const depth = maxZ - minZ;
+  const color = valid
+    ? DEFAULT_SCENE_THEME.selection
+    : DEFAULT_SCENE_THEME.invalidPlacement;
+  const surface = addMesh(
+    root,
+    new PlaneGeometry(width, depth),
+    new MeshBasicMaterial({
+      color,
+      depthWrite: false,
+      opacity: 0.2,
+      transparent: true,
+    }),
+    [(minX + maxX) / 2, 0.028, (minZ + maxZ) / 2],
+  );
+  surface.name = "Node Selection Surface";
+  surface.rotation.x = -Math.PI / 2;
+  const border = new LineLoop(
+    new BufferGeometry().setFromPoints([
+      new Vector3(minX, 0.036, minZ),
+      new Vector3(maxX, 0.036, minZ),
+      new Vector3(maxX, 0.036, maxZ),
+      new Vector3(minX, 0.036, maxZ),
+    ]),
+    new LineBasicMaterial({
+      color,
+      opacity: 0.94,
+      transparent: true,
+    }),
+  );
+  border.name = "Node Selection Border";
+  root.name = `Node Selection ${nodeId}`;
+  root.userData.nodeSelection = { nodeId, valid };
+  root.add(border);
+  return root;
+}
 
 interface GroupTreatment {
   readonly border: number;
@@ -278,6 +334,7 @@ export function createNodeLabel(node: Node): ThreeGroup {
   const texture = createNodeLabelTexture(node.label);
 
   root.name = `Node Label ${node.id}`;
+  root.userData.nodeId = node.id;
   root.userData.nodeLabel = {
     rendering: "world-space",
     text: node.label,
