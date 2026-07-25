@@ -728,22 +728,16 @@ function LifecycleControls({ generation, onRemount }: LifecycleControlsProps) {
   );
 }
 
-function App() {
+function useEditorSession(initialVisualization: Visualization) {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<EditorController | null>(null);
-  const [popChoiceViewId, setPopChoiceViewId] =
-    useState<PopChoiceViewId>(initialPopChoiceView);
-  const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
-  const [visualization, setVisualization] = useState<Visualization>(() =>
-    showPopChoiceVisualization
-      ? activePopChoiceView.visualization
-      : fallbackVisualization,
-  );
+  const [visualization, setVisualization] =
+    useState<Visualization>(initialVisualization);
   const [snapshot, setSnapshot] = useState<EditorSnapshot>(() =>
-    loadingSnapshot(visualization),
+    loadingSnapshot(initialVisualization),
   );
   const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
-    visualization.openingView.cameraMode,
+    initialVisualization.openingView.cameraMode,
   );
   const [cameraMotion, setCameraMotion] =
     useState<CameraMotion>(initialCameraMotion);
@@ -817,7 +811,7 @@ function App() {
     controllerRef.current?.setCameraMotion(cameraMotion);
   }, [cameraMotion]);
 
-  const selectCameraMotion = (motion: CameraMotion): void => {
+  const updateCameraMotion = (motion: CameraMotion): void => {
     const nextSearchParameters = new URLSearchParams(window.location.search);
 
     nextSearchParameters.set("motion", motion);
@@ -828,6 +822,43 @@ function App() {
     );
     setCameraMotion(motion);
   };
+
+  return {
+    assetResolveCount,
+    cameraMode,
+    cameraMotion,
+    redo: (): void => {
+      controllerRef.current?.redo();
+    },
+    remount: (): void => {
+      setSessionGeneration((generation) => generation + 1);
+    },
+    sceneContainerRef,
+    sessionGeneration,
+    setCameraMode,
+    setGridStep: (gridStep: number | null): void => {
+      controllerRef.current?.setGridStep(gridStep);
+    },
+    setVisualization,
+    snapshot,
+    statusHistory,
+    undo: (): void => {
+      controllerRef.current?.undo();
+    },
+    updateCameraMotion,
+    visualization,
+  };
+}
+
+function App() {
+  const [popChoiceViewId, setPopChoiceViewId] =
+    useState<PopChoiceViewId>(initialPopChoiceView);
+  const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
+  const editorSession = useEditorSession(
+    showPopChoiceVisualization
+      ? activePopChoiceView.visualization
+      : fallbackVisualization,
+  );
   const selectPopChoiceView = (viewId: PopChoiceViewId): void => {
     const nextView = POPCHOICE_VIEWS[viewId];
     const nextSearchParameters = new URLSearchParams(window.location.search);
@@ -838,9 +869,9 @@ function App() {
       "",
       `${window.location.pathname}?${nextSearchParameters.toString()}${window.location.hash}`,
     );
-    setCameraMode(nextView.visualization.openingView.cameraMode);
+    editorSession.setCameraMode(nextView.visualization.openingView.cameraMode);
     setPopChoiceViewId(viewId);
-    setVisualization(nextView.visualization);
+    editorSession.setVisualization(nextView.visualization);
   };
   const presentation = presentationForScenario(
     showPopChoiceVisualization,
@@ -850,7 +881,7 @@ function App() {
   const metricSubject = sceneMetricSubject(
     showPopChoiceVisualization,
     activePopChoiceView.label,
-    visualization,
+    editorSession.visualization,
   );
 
   return (
@@ -858,19 +889,17 @@ function App() {
       <header className="app-header">
         <PlaygroundTitle presentation={presentation} />
         <SceneControls
-          cameraMode={cameraMode}
-          cameraMotion={cameraMotion}
-          onCameraModeChange={setCameraMode}
-          onCameraMotionChange={selectCameraMotion}
+          cameraMode={editorSession.cameraMode}
+          cameraMotion={editorSession.cameraMotion}
+          onCameraModeChange={editorSession.setCameraMode}
+          onCameraMotionChange={editorSession.updateCameraMotion}
         />
       </header>
       <div className="scene-stage">
         {lifecycleEnabled ? (
           <LifecycleControls
-            generation={sessionGeneration}
-            onRemount={() => {
-              setSessionGeneration((generation) => generation + 1);
-            }}
+            generation={editorSession.sessionGeneration}
+            onRemount={editorSession.remount}
           />
         ) : null}
         {showPopChoiceVisualization ? (
@@ -882,34 +911,28 @@ function App() {
         <div
           aria-label="Under Glass 3D scene"
           className="scene"
-          ref={sceneContainerRef}
+          ref={editorSession.sceneContainerRef}
         />
         {showPopChoiceVisualization ? (
           <EditorControls
-            onGridStepChange={(gridStep) =>
-              controllerRef.current?.setGridStep(gridStep)
-            }
-            onRedo={() => {
-              controllerRef.current?.redo();
-            }}
-            onUndo={() => {
-              controllerRef.current?.undo();
-            }}
-            snapshot={snapshot}
+            onGridStepChange={editorSession.setGridStep}
+            onRedo={editorSession.redo}
+            onUndo={editorSession.undo}
+            snapshot={editorSession.snapshot}
           />
         ) : null}
       </div>
       <aside className="scene-meta">
         <SceneMetrics
-          assetResolveCount={assetResolveCount}
-          resourceMetrics={snapshot.resourceMetrics}
-          statusHistory={statusHistory}
+          assetResolveCount={editorSession.assetResolveCount}
+          resourceMetrics={editorSession.snapshot.resourceMetrics}
+          statusHistory={editorSession.statusHistory}
           subjectLabel={metricSubject.label}
           subjectValue={metricSubject.value}
-          visualization={visualization}
+          visualization={editorSession.visualization}
         />
       </aside>
-      <RendererDiagnostics diagnostics={snapshot.diagnostics} />
+      <RendererDiagnostics diagnostics={editorSession.snapshot.diagnostics} />
     </main>
   );
 }

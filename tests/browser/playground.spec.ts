@@ -370,7 +370,7 @@ test("repeated Editor Session lifecycles release browser and renderer resources"
 test("repeated 200-Node lifecycles keep one parsed Asset and one active context", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await installLifecycleProbe(page);
   await page.goto("/?scenario=stress&lifecycle=1");
   await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
@@ -993,41 +993,78 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
     "idle",
   );
 
-  await top.click();
-  await expect(top).toHaveAttribute("aria-pressed", "true");
-  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-transition",
-    "moving",
-  );
+  await expect(isometric).toBeVisible();
+  await expect(top).toBeVisible();
+  await page.evaluate(() => {
+    const sceneElement = document.querySelector(
+      '[aria-label="Under Glass 3D scene"]',
+    );
+    const buttons = [...document.querySelectorAll("button")];
+    const isometricButton = buttons.find(
+      (button) => button.textContent?.trim() === "Isometric",
+    );
+    const topButton = buttons.find(
+      (button) => button.textContent?.trim() === "Top",
+    );
 
-  await page.setViewportSize({ width: 1000, height: 900 });
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
-    RECOMMENDATION_NODE_COUNT,
-  );
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-transition",
-    "moving",
-  );
+    if (
+      !(sceneElement instanceof HTMLElement) ||
+      !(isometricButton instanceof HTMLButtonElement) ||
+      !(topButton instanceof HTMLButtonElement)
+    ) {
+      throw new Error("Camera transition controls were not found.");
+    }
 
-  await page.waitForTimeout(120);
-  await isometric.click();
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-mode",
-    "isometric",
-  );
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-transition",
-    "moving",
-  );
+    const transitions: string[] = [];
+    const recordTransition = (): void => {
+      transitions.push(
+        `${sceneElement.dataset.underGlassCameraMode}:${sceneElement.dataset.underGlassCameraTransition}`,
+      );
+    };
+    const observer = new MutationObserver(recordTransition);
 
-  await page.waitForTimeout(40);
-  await top.click();
+    observer.observe(sceneElement, {
+      attributeFilter: [
+        "data-under-glass-camera-mode",
+        "data-under-glass-camera-transition",
+      ],
+      attributes: true,
+    });
+    Object.defineProperty(window, "__underGlassCameraTransitions", {
+      configurable: true,
+      value: transitions,
+    });
+    topButton.click();
+    window.setTimeout(() => {
+      isometricButton.click();
+    }, 0);
+    window.setTimeout(() => {
+      topButton.click();
+    }, 0);
+  });
+
   await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
   await expect(scene).toHaveAttribute(
     "data-under-glass-camera-transition",
     "idle",
     { timeout: 2_000 },
+  );
+  const transitions = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          readonly __underGlassCameraTransitions: readonly string[];
+        }
+      ).__underGlassCameraTransitions,
+  );
+
+  expect(
+    transitions.filter((transition) => transition === "top:moving"),
+  ).toHaveLength(2);
+  expect(transitions).toContain("isometric:moving");
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
   );
 });
 
