@@ -550,60 +550,124 @@ interface EditorControlsProps {
   readonly onUndo: () => void;
 }
 
-function EditorControls({
-  snapshot,
-  onGridStepChange,
-  onRedo,
-  onUndo,
-}: EditorControlsProps) {
+function placementStateFor(snapshot: EditorSnapshot): string | null {
+  if (snapshot.dragPreview === null) {
+    return null;
+  }
+
+  if (snapshot.dragPreview.valid) {
+    return "Valid position";
+  }
+
+  return `Blocked by ${snapshot.dragPreview.conflictingNodeIds.join(", ")}`;
+}
+
+function nodePositionFor(
+  node: EditorSnapshot["visualization"]["nodes"][number] | undefined,
+): string {
+  if (node === undefined) {
+    return "—";
+  }
+
+  return `${node.position.x}, ${node.position.z}`;
+}
+
+function EditorSelection({ snapshot }: Pick<EditorControlsProps, "snapshot">) {
   const selectedNode = snapshot.visualization.nodes.find(
     (node) => node.id === snapshot.selectedNodeId,
   );
-  const placementState =
-    snapshot.dragPreview === null
-      ? null
-      : snapshot.dragPreview.valid
-        ? "Valid position"
-        : `Blocked by ${snapshot.dragPreview.conflictingNodeIds.join(", ")}`;
+  const placementState = placementStateFor(snapshot);
 
   return (
+    <p className="editor-selection" aria-live="polite">
+      <span className="control-label">Selection</span>
+      <strong>{selectedNode?.label ?? "None"}</strong>
+      <span data-testid="selected-node-position">
+        {nodePositionFor(selectedNode)}
+      </span>
+      {placementState === null ? null : (
+        <span className="placement-state">{placementState}</span>
+      )}
+    </p>
+  );
+}
+
+function GridSnapControls({
+  onGridStepChange,
+  snapshot,
+}: Pick<EditorControlsProps, "onGridStepChange" | "snapshot">) {
+  return (
+    <div aria-label="Grid snapping" className="snap-options">
+      <button
+        aria-pressed={snapshot.gridStep === 1}
+        onClick={() => onGridStepChange(1)}
+        type="button"
+      >
+        Snap 1
+      </button>
+      <button
+        aria-pressed={snapshot.gridStep === null}
+        onClick={() => onGridStepChange(null)}
+        type="button"
+      >
+        Free
+      </button>
+    </div>
+  );
+}
+
+function HistoryControls({
+  onRedo,
+  onUndo,
+  snapshot,
+}: Pick<EditorControlsProps, "onRedo" | "onUndo" | "snapshot">) {
+  return (
+    <>
+      <button disabled={!snapshot.canUndo} onClick={onUndo} type="button">
+        Undo
+      </button>
+      <button disabled={!snapshot.canRedo} onClick={onRedo} type="button">
+        Redo
+      </button>
+    </>
+  );
+}
+
+function EditorControls(props: EditorControlsProps) {
+  return (
     <div aria-label="Editor controls" className="editor-controls">
-      <p className="editor-selection" aria-live="polite">
-        <span className="control-label">Selection</span>
-        <strong>{selectedNode?.label ?? "None"}</strong>
-        <span data-testid="selected-node-position">
-          {selectedNode === undefined
-            ? "—"
-            : `${selectedNode.position.x}, ${selectedNode.position.z}`}
-        </span>
-        {placementState === null ? null : (
-          <span className="placement-state">{placementState}</span>
-        )}
-      </p>
+      <EditorSelection snapshot={props.snapshot} />
       <div className="editor-actions">
-        <div aria-label="Grid snapping" className="snap-options">
-          <button
-            aria-pressed={snapshot.gridStep === 1}
-            onClick={() => onGridStepChange(1)}
-            type="button"
-          >
-            Snap 1
-          </button>
-          <button
-            aria-pressed={snapshot.gridStep === null}
-            onClick={() => onGridStepChange(null)}
-            type="button"
-          >
-            Free
-          </button>
-        </div>
-        <button disabled={!snapshot.canUndo} onClick={onUndo} type="button">
-          Undo
-        </button>
-        <button disabled={!snapshot.canRedo} onClick={onRedo} type="button">
-          Redo
-        </button>
+        <GridSnapControls
+          onGridStepChange={props.onGridStepChange}
+          snapshot={props.snapshot}
+        />
+        <HistoryControls
+          onRedo={props.onRedo}
+          onUndo={props.onUndo}
+          snapshot={props.snapshot}
+        />
       </div>
+    </div>
+  );
+}
+
+interface PlaygroundTitleProps {
+  readonly presentation: ReturnType<typeof presentationForScenario>;
+  readonly showPopChoiceVisualization: boolean;
+}
+
+function PlaygroundTitle({
+  presentation,
+  showPopChoiceVisualization,
+}: PlaygroundTitleProps) {
+  return (
+    <div className="app-title">
+      <p className="eyebrow">Under Glass</p>
+      <h1>
+        {showPopChoiceVisualization ? "PopChoice architecture" : "Under Glass"}
+      </h1>
+      <p className="lede">{presentation.lede}</p>
     </div>
   );
 }
@@ -734,15 +798,10 @@ function App() {
   return (
     <main className={presentation.className}>
       <header className="app-header">
-        <div className="app-title">
-          <p className="eyebrow">Under Glass</p>
-          <h1>
-            {showPopChoiceVisualization
-              ? "PopChoice architecture"
-              : "Under Glass"}
-          </h1>
-          <p className="lede">{presentation.lede}</p>
-        </div>
+        <PlaygroundTitle
+          presentation={presentation}
+          showPopChoiceVisualization={showPopChoiceVisualization}
+        />
         <SceneControls
           cameraMode={cameraMode}
           cameraMotion={cameraMotion}

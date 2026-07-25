@@ -22,6 +22,10 @@ import {
   type ViewerSemanticLayerFactory,
 } from "./semantic-layer.js";
 import {
+  resolveEditorKeyboardCommand,
+  type EditorKeyboardCommand,
+} from "./editor-keyboard.js";
+import {
   createViewerControllerWithRenderer,
   type CreateViewerControllerOptions,
   type SceneRendererFactory,
@@ -293,6 +297,15 @@ export function createEditorControllerWithFactories(
   };
   const undo = (): boolean => applyHistoryTransition("undo");
   const redo = (): boolean => applyHistoryTransition("redo");
+  const keyboardCommandHandlers: Record<EditorKeyboardCommand, () => boolean> =
+    {
+      cancel: () => {
+        cancelNodeMove();
+        return true;
+      },
+      redo,
+      undo,
+    };
 
   const onPointerDown = (event: PointerEvent): void => {
     if (!active || activeRenderer === null) {
@@ -355,30 +368,15 @@ export function createEditorControllerWithFactories(
       return;
     }
 
-    if (
-      event.key === "Escape" &&
-      (dragPointerId !== null || dragPreview !== null)
-    ) {
-      cancelNodeMove();
-      event.preventDefault();
+    const command = resolveEditorKeyboardCommand(
+      event,
+      dragPointerId !== null || dragPreview !== null,
+    );
+    if (command === null) {
       return;
     }
 
-    const modifier = event.metaKey || event.ctrlKey;
-    if (!modifier) {
-      return;
-    }
-
-    const key = event.key.toLowerCase();
-    const didChange =
-      key === "z"
-        ? event.shiftKey
-          ? redo()
-          : undo()
-        : key === "y" && event.ctrlKey
-          ? redo()
-          : false;
-    if (didChange) {
+    if (keyboardCommandHandlers[command]()) {
       event.preventDefault();
     }
   };
