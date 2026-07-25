@@ -1,6 +1,6 @@
 {
   "name": "@under-glass/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Runtime-neutral document and engine primitives for Under Glass.",
   "type": "module",
   "license": "MIT",

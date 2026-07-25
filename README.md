@@ -2,7 +2,24 @@
 
 Under Glass is an open-source toolkit for authoring and presenting interactive three-dimensional visualizations of software projects.
 
-The repository is in its bootstrap stage. The product boundaries and accepted architecture decisions live in [`PRODUCT.md`](./PRODUCT.md) and [`docs/adr`](./docs/adr).
+The v0.1 release preview is available at
+[under-glass.shchilkin.dev](https://under-glass.shchilkin.dev). It opens on the
+canonical PopChoice architecture diagram and minimal Editor. Product boundaries
+and accepted architecture decisions live in [`PRODUCT.md`](./PRODUCT.md) and
+[`docs/adr`](./docs/adr).
+
+## v0.1 boundary
+
+v0.1 includes GLB-only host-resolved assets, differentiated 3D Nodes, labels,
+flat Groups, basic directional Connections, isometric/top views, both supported
+Camera Motion choices, missing-asset fallback, and select/move/snap/undo/redo
+authoring for existing Nodes.
+
+Node and Group creation, Group editing, Connection authoring, obstacle-aware
+routing, Route Anchors, Route Conflicts, a public React Editor API, persistent
+history, real-time collaboration, and npm publication remain outside v0.1. See
+the [`v0.1.0` release notes](./docs/releases/v0.1.0.md) for the complete release
+evidence.
 
 ## Packages
 
