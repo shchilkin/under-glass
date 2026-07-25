@@ -1,4 +1,4 @@
-import { type Object3D } from "three";
+import type { Object3D } from "three";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 
 import { validateAssetDefinitionSemantics, type Node } from "@under-glass/core";

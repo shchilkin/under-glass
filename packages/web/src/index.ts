@@ -19,12 +19,12 @@ export type {
   ViewerAccessibility,
 } from "./semantic-graph.js";
 
-export {
-  type AssetResolver,
-  type CameraMotion,
-  type ResolvedAsset,
-  type SceneRendererDiagnostic,
-  type SceneRendererDiagnosticCode,
-  type SceneRendererStatus,
-  type SetCameraModeOptions,
+export type {
+  AssetResolver,
+  CameraMotion,
+  ResolvedAsset,
+  SceneRendererDiagnostic,
+  SceneRendererDiagnosticCode,
+  SceneRendererStatus,
+  SetCameraModeOptions,
 } from "@under-glass/three";

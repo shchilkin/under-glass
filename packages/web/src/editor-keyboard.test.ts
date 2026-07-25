@@ -10,10 +10,10 @@ const NO_MODIFIERS = {
 
 describe("resolveEditorKeyboardCommand", () => {
   it("resolves Escape only while a drag is active", () => {
-    const escape = { ...NO_MODIFIERS, key: "Escape" };
+    const escapeKey = { ...NO_MODIFIERS, key: "Escape" };
 
-    expect(resolveEditorKeyboardCommand(escape, true)).toBe("cancel");
-    expect(resolveEditorKeyboardCommand(escape, false)).toBeNull();
+    expect(resolveEditorKeyboardCommand(escapeKey, true)).toBe("cancel");
+    expect(resolveEditorKeyboardCommand(escapeKey, false)).toBeNull();
   });
 
   it.each([

@@ -3,6 +3,9 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  build: {
+    chunkSizeWarningLimit: 800,
+  },
   resolve: {
     alias: {
       "@under-glass/core": fileURLToPath(

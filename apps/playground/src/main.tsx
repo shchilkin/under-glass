@@ -403,7 +403,7 @@ function ArchitectureViewSwitch({
   return (
     <div className="view-switch">
       <span className="control-label">Architecture view</span>
-      <div aria-label="Architecture view" className="view-options">
+      <fieldset aria-label="Architecture view" className="view-options">
         {POPCHOICE_VIEW_IDS.map((viewId) => {
           const view = POPCHOICE_VIEWS[viewId];
 
@@ -418,7 +418,7 @@ function ArchitectureViewSwitch({
             </button>
           );
         })}
-      </div>
+      </fieldset>
     </div>
   );
 }
@@ -440,7 +440,7 @@ function SceneControls({
     <div className="scene-controls">
       <div className="motion-lab">
         <span className="control-label">Camera motion</span>
-        <div aria-label="Camera motion profile" className="motion-profile">
+        <fieldset aria-label="Camera motion profile" className="motion-profile">
           {CAMERA_MOTIONS.map((motion) => (
             <button
               aria-label={CAMERA_MOTION_COPY[motion].label}
@@ -452,12 +452,12 @@ function SceneControls({
               {CAMERA_MOTION_COPY[motion].label}
             </button>
           ))}
-        </div>
+        </fieldset>
         <span className="motion-description">
           {CAMERA_MOTION_COPY[cameraMotion].description}
         </span>
       </div>
-      <div aria-label="Camera mode" className="camera-mode">
+      <fieldset aria-label="Camera mode" className="camera-mode">
         <button
           aria-pressed={cameraMode === "isometric"}
           onClick={() => onCameraModeChange("isometric")}
@@ -472,7 +472,7 @@ function SceneControls({
         >
           Top
         </button>
-      </div>
+      </fieldset>
     </div>
   );
 }
@@ -644,7 +644,7 @@ function GridSnapControls({
   snapshot,
 }: Pick<EditorControlsProps, "onGridStepChange" | "snapshot">) {
   return (
-    <div aria-label="Grid snapping" className="snap-options">
+    <fieldset aria-label="Grid snapping" className="snap-options">
       <button
         aria-pressed={snapshot.gridStep === 1}
         onClick={() => onGridStepChange(1)}
@@ -659,7 +659,7 @@ function GridSnapControls({
       >
         Free
       </button>
-    </div>
+    </fieldset>
   );
 }
 
@@ -682,7 +682,7 @@ function HistoryControls({
 
 function EditorControls(props: EditorControlsProps) {
   return (
-    <div aria-label="Editor controls" className="editor-controls">
+    <section aria-label="Editor controls" className="editor-controls">
       <EditorSelection snapshot={props.snapshot} />
       <div className="editor-actions">
         <GridSnapControls
@@ -695,7 +695,7 @@ function EditorControls(props: EditorControlsProps) {
           snapshot={props.snapshot}
         />
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -720,19 +720,22 @@ interface LifecycleControlsProps {
 
 function LifecycleControls({ generation, onRemount }: LifecycleControlsProps) {
   return (
-    <div aria-label="Lifecycle test controls" className="lifecycle-controls">
+    <section
+      aria-label="Lifecycle test controls"
+      className="lifecycle-controls"
+    >
       <span>
         Session <strong data-testid="session-generation">{generation}</strong>
       </span>
       <button onClick={onRemount} type="button">
         Remount Editor Session
       </button>
-    </div>
+    </section>
   );
 }
 
 function useEditorSession(initialVisualization: Visualization) {
-  const sceneContainerRef = useRef<HTMLDivElement>(null);
+  const sceneContainerRef = useRef<HTMLElement>(null);
   const controllerRef = useRef<EditorController | null>(null);
   const [visualization, setVisualization] =
     useState<Visualization>(initialVisualization);
@@ -748,6 +751,7 @@ function useEditorSession(initialVisualization: Visualization) {
   const [assetResolveCount, setAssetResolveCount] = useState(0);
   const [sessionGeneration, setSessionGeneration] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Session generation deliberately remounts the controller; live visualization and camera values are synchronized by the effects below.
   useEffect(() => {
     const container = sceneContainerRef.current;
 
@@ -908,7 +912,7 @@ function App() {
             onViewChange={selectPopChoiceView}
           />
         ) : null}
-        <div
+        <section
           aria-label="Under Glass 3D scene"
           className="scene"
           ref={editorSession.sceneContainerRef}

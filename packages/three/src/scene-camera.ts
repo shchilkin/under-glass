@@ -1,4 +1,4 @@
-import { OrthographicCamera, Quaternion, Vector3 } from "three";
+import { OrthographicCamera, Vector3, type Quaternion } from "three";
 
 import type { GroundBounds, OpeningView } from "@under-glass/core";
 

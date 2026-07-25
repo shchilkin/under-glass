@@ -24,6 +24,16 @@ export default defineConfig({
       name: "chromium",
       use: devices["Desktop Chrome"],
     },
+    {
+      name: "firefox-smoke",
+      testMatch: /cross-browser\.spec\.ts/,
+      use: devices["Desktop Firefox"],
+    },
+    {
+      name: "webkit-smoke",
+      testMatch: /cross-browser\.spec\.ts/,
+      use: devices["Desktop Safari"],
+    },
   ],
   use: {
     baseURL: "http://127.0.0.1:4185",

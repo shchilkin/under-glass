@@ -1,11 +1,11 @@
 import {
   type BufferGeometry,
-  Material,
   Mesh,
   type Object3D,
   type Skeleton,
   SkinnedMesh,
   Texture,
+  type Material,
 } from "three";
 
 interface DisposalRegistry {

@@ -49,7 +49,7 @@ export {
   type AssetDefinitionDiagnosticPath,
 } from "./asset-definition-validation.js";
 
-export { type DiagnosticPath, type DiagnosticSeverity } from "./diagnostics.js";
+export type { DiagnosticPath, DiagnosticSeverity } from "./diagnostics.js";
 
 export {
   StructuralValidationError,
