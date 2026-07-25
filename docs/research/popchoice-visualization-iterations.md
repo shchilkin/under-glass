@@ -345,9 +345,9 @@ What this does not claim:
 
 - v0.1 sets no frame-rate target and does not treat one local render as a
   benchmark.
-- Resource counts for one completed lifecycle are in scope here. Growth and
-  disposal across repeated mount/unmount cycles remain the next stability
-  slice.
+- Repeated mount/unmount growth and disposal are now covered by the v0.1
+  stability gates. They prove stable owned-resource counts for the canonical
+  and 200-Node fixtures, not a general browser memory benchmark.
 - Connections are excluded so this fixture measures repeated Node and Asset
   behavior instead of pre-empting the v0.2 routing scope.
 

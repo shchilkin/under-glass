@@ -48,7 +48,8 @@ requests them:
 - `?scenario=lifecycle` remounts the canonical Editor Session;
 - `?scenario=stress&lifecycle=1` remounts the 200-Node fixture.
 
-The browser gates verify after every remount that:
+After one warm-up remount absorbs browser and framework listener
+initialization, the browser gates verify after every measured remount that:
 
 - exactly one renderer canvas, label overlay, and semantic summary remain;
 - renderer and Editor listeners return to the initial live-target count;

@@ -10,6 +10,7 @@ const RECOMMENDATION_NODE_COUNT = 7;
 
 interface LifecycleProbeSnapshot {
   readonly activeListenerCount: number;
+  readonly activeListeners: readonly string[];
   readonly contextLossCount: number;
   readonly createdContextCount: number;
 }
@@ -45,6 +46,23 @@ async function installLifecycleProbe(page: Page): Promise<void> {
       }
 
       return count;
+    };
+    const activeListeners = (): string[] => {
+      const details: string[] = [];
+
+      for (const [target, targetListeners] of listenerRegistry) {
+        if (target instanceof Node && !target.isConnected) {
+          continue;
+        }
+
+        for (const [key, listeners] of targetListeners) {
+          details.push(
+            `${target.constructor.name}:${key}:${String(listeners.size)}`,
+          );
+        }
+      }
+
+      return details.sort();
     };
 
     EventTarget.prototype.addEventListener = function (
@@ -96,6 +114,7 @@ async function installLifecycleProbe(page: Page): Promise<void> {
     const originalGetExtension = WebGL2RenderingContext.prototype.getExtension;
     const probe = {
       activeListenerCount,
+      activeListeners,
       contextLossCount: 0,
       createdContextCount: 0,
     };
@@ -156,6 +175,7 @@ async function readLifecycleProbe(page: Page): Promise<LifecycleProbeSnapshot> {
       window as Window & {
         readonly __underGlassLifecycleProbe: {
           readonly activeListenerCount: () => number;
+          readonly activeListeners: () => string[];
           readonly contextLossCount: number;
           readonly createdContextCount: number;
         };
@@ -164,6 +184,7 @@ async function readLifecycleProbe(page: Page): Promise<LifecycleProbeSnapshot> {
 
     return {
       activeListenerCount: probe.activeListenerCount(),
+      activeListeners: probe.activeListeners(),
       contextLossCount: probe.contextLossCount,
       createdContextCount: probe.createdContextCount,
     };
@@ -302,7 +323,6 @@ test("repeated Editor Session lifecycles release browser and renderer resources"
     timeout: 8_000,
   });
 
-  const baseline = await readLifecycleProbe(page);
   const remount = page.getByRole("button", {
     name: "Remount Editor Session",
   });
@@ -312,7 +332,15 @@ test("repeated Editor Session lifecycles release browser and renderer resources"
     1,
   );
 
-  for (let generation = 1; generation <= 3; generation += 1) {
+  await remount.click();
+  await expect(page.getByTestId("session-generation")).toHaveText("1");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  const baseline = await readLifecycleProbe(page);
+
+  for (let cycle = 1; cycle <= 3; cycle += 1) {
+    const generation = cycle + 1;
     await remount.click();
     await expect(page.getByTestId("session-generation")).toHaveText(
       String(generation),
@@ -331,15 +359,17 @@ test("repeated Editor Session lifecycles release browser and renderer resources"
     ).toHaveCount(1);
     await expect
       .poll(async () => (await readLifecycleProbe(page)).contextLossCount)
-      .toBe(generation);
+      .toBe(baseline.contextLossCount + cycle);
     await expect
       .poll(async () => (await readLifecycleProbe(page)).activeListenerCount)
       .toBe(baseline.activeListenerCount);
   }
 
-  expect(await readLifecycleProbe(page)).toEqual({
+  const finalProbe = await readLifecycleProbe(page);
+  expect(finalProbe.activeListeners).toEqual(baseline.activeListeners);
+  expect(finalProbe).toMatchObject({
     activeListenerCount: baseline.activeListenerCount,
-    contextLossCount: 3,
+    contextLossCount: baseline.contextLossCount + 3,
     createdContextCount: baseline.createdContextCount + 3,
   });
 });
@@ -354,12 +384,19 @@ test("repeated 200-Node lifecycles keep one parsed Asset and one active context"
     timeout: 15_000,
   });
 
-  const baseline = await readLifecycleProbe(page);
   const remount = page.getByRole("button", {
     name: "Remount Editor Session",
   });
 
-  for (let generation = 1; generation <= 2; generation += 1) {
+  await remount.click();
+  await expect(page.getByTestId("session-generation")).toHaveText("1");
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  const baseline = await readLifecycleProbe(page);
+
+  for (let cycle = 1; cycle <= 2; cycle += 1) {
+    const generation = cycle + 1;
     await remount.click();
     await expect(page.getByTestId("session-generation")).toHaveText(
       String(generation),
@@ -375,15 +412,17 @@ test("repeated 200-Node lifecycles keep one parsed Asset and one active context"
     );
     await expect
       .poll(async () => (await readLifecycleProbe(page)).contextLossCount)
-      .toBe(generation);
+      .toBe(baseline.contextLossCount + cycle);
     await expect
       .poll(async () => (await readLifecycleProbe(page)).activeListenerCount)
       .toBe(baseline.activeListenerCount);
   }
 
-  expect(await readLifecycleProbe(page)).toEqual({
+  const finalProbe = await readLifecycleProbe(page);
+  expect(finalProbe.activeListeners).toEqual(baseline.activeListeners);
+  expect(finalProbe).toMatchObject({
     activeListenerCount: baseline.activeListenerCount,
-    contextLossCount: 2,
+    contextLossCount: baseline.contextLossCount + 2,
     createdContextCount: baseline.createdContextCount + 2,
   });
 });
@@ -798,6 +837,117 @@ test("selects, moves, undoes, and redoes a Node in the editor loop", async ({
   await expect(page.locator("[data-under-glass-semantic-summary]")).toHaveCount(
     1,
   );
+});
+
+test("supports the complete editor interaction loop in Top mode", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  const canvas = page.locator("canvas[data-under-glass-renderer]");
+  const webControl = page.locator(
+    '[data-under-glass-semantic-node-control="web"]',
+  );
+
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
+
+  await webControl.focus();
+  await page.keyboard.press("Enter");
+  await expect(webControl).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-selected-node-id",
+    "web",
+  );
+
+  const selectedPosition = page.getByTestId("selected-node-position");
+  const originalPosition = await selectedPosition.textContent();
+  const bounds = await canvas.boundingBox();
+
+  expect(bounds).not.toBeNull();
+  if (bounds === null) {
+    return;
+  }
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 373, bounds.y + 255, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "valid",
+  );
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(scene).not.toHaveAttribute(
+    "data-under-glass-placement-validity",
+    /.+/,
+  );
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 373, bounds.y + 255, { steps: 8 });
+  await canvas.dispatchEvent("pointercancel", {
+    bubbles: true,
+    pointerId: 1,
+  });
+  await page.mouse.up();
+  await expect(scene).not.toHaveAttribute(
+    "data-under-glass-placement-validity",
+    /.+/,
+  );
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 500, bounds.y + 198, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "invalid",
+  );
+  await page.mouse.up();
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 373, bounds.y + 255, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "valid",
+  );
+  await page.mouse.up();
+
+  const movedPosition = await selectedPosition.textContent();
+  expect(movedPosition).not.toBe(originalPosition);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+
+  await page.keyboard.press("Control+z");
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeEnabled();
+
+  await page.keyboard.press("Control+Shift+z");
+  await expect(selectedPosition).toHaveText(movedPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+
+  await page.keyboard.press("Control+z");
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
 });
 
 test("declutters world-space labels in a compact viewport", async ({
