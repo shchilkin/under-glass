@@ -313,3 +313,46 @@ Decision:
   `@under-glass/three`.
 - Continue to expose host-owned concrete Visualization snapshots rather than
   introduce a persistent editor document or collaboration backend.
+
+### 12. Separate the canonical Editor from its stress evidence
+
+What changed:
+
+- The default playground remains the accepted PopChoice Recommendation view;
+  performance evidence does not replace the product story with a synthetic
+  renderer scene.
+- A dedicated `?scenario=stress` fixture places exactly 200 unique Nodes on a
+  deterministic Ground Plane grid.
+- Every stress Node references the same checked-in `service-asset`, while the
+  fixture intentionally contains no Groups or Connections.
+- The stress presentation exposes Node, Connection, Group, Asset resolve,
+  Asset parse, Node instance, and lifecycle counts through the same playground
+  metrics as other scenarios.
+
+What worked:
+
+- The browser reaches `ready` with all 200 Nodes and the complete semantic
+  mirror while resolving and parsing the repeated Asset ID once.
+- Renderer-owned resource metrics distinguish one cached parsed Asset from 200
+  scene Node instances; this makes reuse observable without inspecting test
+  spies or host implementation details.
+- A separate URL keeps the fixture reproducible without adding stress-only
+  controls or state to the canonical Editor.
+- Fixed source data and repository-owned GLB bytes keep the result independent
+  of network services.
+
+What this does not claim:
+
+- v0.1 sets no frame-rate target and does not treat one local render as a
+  benchmark.
+- Resource counts for one completed lifecycle are in scope here. Growth and
+  disposal across repeated mount/unmount cycles remain the next stability
+  slice.
+- Connections are excluded so this fixture measures repeated Node and Asset
+  behavior instead of pre-empting the v0.2 routing scope.
+
+Decision:
+
+- Keep the accepted PopChoice view as the default canonical v0.1 Editor.
+- Keep stress evidence deterministic, separately addressable, and
+  non-authoritative for visual design.

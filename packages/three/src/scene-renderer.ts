@@ -683,7 +683,10 @@ function applyResolvedAssetDefinition(
     context.surface,
     context.session,
   );
-  context.store.setSnapshot(context.store.getSnapshot());
+  context.store.setSnapshot({
+    ...context.store.getSnapshot(),
+    resourceMetrics: context.session.assets.getMetrics(),
+  });
 }
 
 async function prepareNodeAsset(
@@ -745,6 +748,7 @@ function reportRecoverableNodeFailure(
   node: Node,
   error: unknown,
   store: SceneStateStore,
+  session: RendererSession,
   isDisposed: () => boolean,
 ): void {
   if (!isDisposed()) {
@@ -754,6 +758,7 @@ function reportRecoverableNodeFailure(
         ...snapshot.diagnostics,
         recoverableAssetDiagnostic(node, error),
       ],
+      resourceMetrics: session.assets.getMetrics(),
       status: "loading",
     });
   }
@@ -779,7 +784,7 @@ async function loadNode(
 
     completePreparedNodeLoad(node, loadedAsset, surface, session, isDisposed);
   } catch (error) {
-    reportRecoverableNodeFailure(node, error, store, isDisposed);
+    reportRecoverableNodeFailure(node, error, store, session, isDisposed);
   }
 }
 
@@ -826,6 +831,11 @@ function deferFailedLifecycle(
     if (!isDisposed()) {
       store.setSnapshot({
         diagnostics,
+        resourceMetrics: {
+          cachedAssetCount: 0,
+          nodeInstanceCount: 0,
+          parsedAssetCount: 0,
+        },
         status: "failed",
       });
     }
@@ -877,6 +887,7 @@ async function loadNodes(
   if (!session.disposed) {
     store.setSnapshot({
       diagnostics: store.getSnapshot().diagnostics,
+      resourceMetrics: session.assets.getMetrics(),
       status: "ready",
     });
   }
@@ -897,6 +908,7 @@ function applyRecoverableDiagnostics(
 
   store.setSnapshot({
     diagnostics: recoverableDiagnostics,
+    resourceMetrics: store.getSnapshot().resourceMetrics,
     status: "loading",
   });
 }

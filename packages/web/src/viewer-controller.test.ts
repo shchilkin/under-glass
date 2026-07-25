@@ -51,6 +51,11 @@ interface RendererHarness {
 function createRendererHarness(): RendererHarness {
   let snapshot: SceneRendererSnapshot = {
     diagnostics: [],
+    resourceMetrics: {
+      cachedAssetCount: 0,
+      nodeInstanceCount: 0,
+      parsedAssetCount: 0,
+    },
     status: "loading",
   };
   const listeners = new Set<() => void>();
@@ -155,12 +160,22 @@ describe("createViewerController", () => {
     controller.subscribe(listener);
     factory.harnesses[0]?.emit({
       diagnostics: [],
+      resourceMetrics: {
+        cachedAssetCount: 1,
+        nodeInstanceCount: 1,
+        parsedAssetCount: 1,
+      },
       status: "ready",
     });
 
     expect(listener).toHaveBeenCalledOnce();
     expect(controller.getSnapshot()).toEqual({
       diagnostics: [],
+      resourceMetrics: {
+        cachedAssetCount: 1,
+        nodeInstanceCount: 1,
+        parsedAssetCount: 1,
+      },
       status: "ready",
       visualization: FIRST_VISUALIZATION,
     });
@@ -170,8 +185,24 @@ describe("createViewerController", () => {
       visualization: FIRST_VISUALIZATION,
     });
     expect(factory.semanticHarness.rendererSnapshots).toEqual([
-      { diagnostics: [], status: "loading" },
-      { diagnostics: [], status: "ready" },
+      {
+        diagnostics: [],
+        resourceMetrics: {
+          cachedAssetCount: 0,
+          nodeInstanceCount: 0,
+          parsedAssetCount: 0,
+        },
+        status: "loading",
+      },
+      {
+        diagnostics: [],
+        resourceMetrics: {
+          cachedAssetCount: 1,
+          nodeInstanceCount: 1,
+          parsedAssetCount: 1,
+        },
+        status: "ready",
+      },
     ]);
   });
 
@@ -239,7 +270,15 @@ describe("createViewerController", () => {
     controller.dispose();
     controller.setCameraMode("isometric");
     controller.setVisualization(SECOND_VISUALIZATION);
-    factory.harnesses[0]?.emit({ diagnostics: [], status: "ready" });
+    factory.harnesses[0]?.emit({
+      diagnostics: [],
+      resourceMetrics: {
+        cachedAssetCount: 1,
+        nodeInstanceCount: 1,
+        parsedAssetCount: 1,
+      },
+      status: "ready",
+    });
 
     expect(renderer?.setCameraMode).toHaveBeenCalledTimes(1);
     expect(renderer?.setCameraMode).toHaveBeenCalledWith("top", {

@@ -103,6 +103,33 @@ test("renders multiple Nodes while resolving a repeated Asset ID once", async ({
   );
 });
 
+test("renders the 200-Node fixture with one resolved, parsed, cached Asset", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=stress");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "200-Node stress fixture" }),
+  ).toBeVisible();
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByTestId("node-count")).toHaveText("200");
+  await expect(page.getByTestId("connection-count")).toHaveText("0");
+  await expect(page.getByTestId("group-count")).toHaveText("0");
+  await expect(page.getByTestId("asset-resolve-count")).toHaveText("1");
+  await expect(page.getByTestId("asset-parse-count")).toHaveText("1");
+  await expect(page.getByTestId("asset-cache-count")).toHaveText("1");
+  await expect(page.getByTestId("node-instance-count")).toHaveText("200");
+  await expect(page.getByLabel("Renderer diagnostics")).toHaveCount(0);
+  await expect(page.locator("[data-under-glass-semantic-node]")).toHaveCount(
+    200,
+  );
+  await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+    1,
+  );
+});
+
 test("replaces progressive Placeholders without waiting for slower Nodes", async ({
   page,
 }) => {

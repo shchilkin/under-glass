@@ -11,6 +11,11 @@ export function createSceneStateStore(): SceneStateStore {
   let active = true;
   let snapshot: SceneRendererSnapshot = {
     diagnostics: [],
+    resourceMetrics: {
+      cachedAssetCount: 0,
+      nodeInstanceCount: 0,
+      parsedAssetCount: 0,
+    },
     status: "loading",
   };
   const listeners = new Set<() => void>();

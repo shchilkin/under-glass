@@ -6,6 +6,7 @@ import {
   type CreateSceneRendererOptions,
   type SceneRenderer,
   type SceneRendererDiagnostic,
+  type SceneRendererResourceMetrics,
   type SceneRendererStatus,
   type SetCameraModeOptions,
 } from "@under-glass/three";
@@ -21,6 +22,7 @@ import {
 
 export interface ViewerSnapshot {
   readonly diagnostics: readonly SceneRendererDiagnostic[];
+  readonly resourceMetrics: SceneRendererResourceMetrics;
   readonly status: SceneRendererStatus;
   readonly visualization: Visualization;
 }
