@@ -324,11 +324,27 @@ test("repeated Editor Session lifecycles release browser and renderer resources"
     1,
   );
 
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
+    "data-under-glass-camera-mode",
+    "top",
+  );
+  await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
   await remount.click();
   await expect(page.getByTestId("session-generation")).toHaveText("1");
   await expect(
     page.getByText("loading → ready", { exact: true }),
   ).toBeVisible();
+  await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
+    "data-under-glass-camera-mode",
+    "top",
+  );
+  await expect(
+    page.getByRole("button", { name: "Top", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   const baseline = await readLifecycleProbe(page);
 
   for (let cycle = 1; cycle <= 3; cycle += 1) {
@@ -995,7 +1011,7 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
 
   await expect(isometric).toBeVisible();
   await expect(top).toBeVisible();
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const sceneElement = document.querySelector(
       '[aria-label="Under Glass 3D scene"]',
     );
@@ -1016,10 +1032,18 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
     }
 
     const transitions: string[] = [];
+    const resizeTransitions: string[] = [];
+    let resolveMoving: (() => void) | undefined;
+    const moving = new Promise<void>((resolve) => {
+      resolveMoving = resolve;
+    });
     const recordTransition = (): void => {
-      transitions.push(
-        `${sceneElement.dataset.underGlassCameraMode}:${sceneElement.dataset.underGlassCameraTransition}`,
-      );
+      const transition = `${sceneElement.dataset.underGlassCameraMode}:${sceneElement.dataset.underGlassCameraTransition}`;
+
+      transitions.push(transition);
+      if (transition === "top:moving") {
+        resolveMoving?.();
+      }
     };
     const observer = new MutationObserver(recordTransition);
 
@@ -1034,35 +1058,61 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
       configurable: true,
       value: transitions,
     });
+    Object.defineProperty(window, "__underGlassResizeTransitions", {
+      configurable: true,
+      value: resizeTransitions,
+    });
+
     topButton.click();
-    window.setTimeout(() => {
-      isometricButton.click();
-    }, 0);
+    await moving;
+    const initialWidth = sceneElement.getBoundingClientRect().width;
+    const resized = new Promise<void>((resolve) => {
+      const resizeObserver = new ResizeObserver(() => {
+        if (
+          Math.abs(sceneElement.getBoundingClientRect().width - initialWidth) >
+          1
+        ) {
+          resizeTransitions.push(
+            `${sceneElement.dataset.underGlassCameraMode}:${sceneElement.dataset.underGlassCameraTransition}`,
+          );
+          resizeObserver.disconnect();
+          resolve();
+        }
+      });
+
+      resizeObserver.observe(sceneElement);
+    });
+
+    sceneElement.style.width = `${initialWidth - 160}px`;
+    await resized;
+    isometricButton.click();
     window.setTimeout(() => {
       topButton.click();
     }, 0);
   });
-
   await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
   await expect(scene).toHaveAttribute(
     "data-under-glass-camera-transition",
     "idle",
     { timeout: 2_000 },
   );
-  const transitions = await page.evaluate(
-    () =>
-      (
-        window as Window & {
-          readonly __underGlassCameraTransitions: readonly string[];
-        }
-      ).__underGlassCameraTransitions,
-  );
+  const transitions = await page.evaluate(() => {
+    const instrumentedWindow = window as Window & {
+      readonly __underGlassCameraTransitions: readonly string[];
+      readonly __underGlassResizeTransitions: readonly string[];
+    };
+
+    return {
+      resizeTransitions: instrumentedWindow.__underGlassResizeTransitions,
+      transitions: instrumentedWindow.__underGlassCameraTransitions,
+    };
+  });
 
   expect(
-    transitions.filter((transition) => transition === "top:moving"),
+    transitions.transitions.filter((transition) => transition === "top:moving"),
   ).toHaveLength(2);
-  expect(transitions).toContain("isometric:moving");
-  await page.setViewportSize({ width: 1000, height: 900 });
+  expect(transitions.transitions).toContain("isometric:moving");
+  expect(transitions.resizeTransitions).toEqual(["top:moving"]);
   await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
     RECOMMENDATION_NODE_COUNT,
   );

@@ -274,6 +274,9 @@ function createDemoVisualization(): Visualization {
 
 const fallbackVisualization =
   scenario === "stress" ? stressVisualization : createDemoVisualization();
+const initialVisualization = showPopChoiceVisualization
+  ? POPCHOICE_VIEWS[initialPopChoiceView].visualization
+  : fallbackVisualization;
 
 function loadingSnapshot(visualization: Visualization): EditorSnapshot {
   return {
@@ -771,6 +774,7 @@ function useEditorSession(initialVisualization: Visualization) {
       visualization,
     });
     controllerRef.current = controller;
+    controller.setCameraMode(cameraMode, { transition: "immediate" });
     const updateSnapshot = () => {
       const nextSnapshot = controller.getSnapshot();
       setSnapshot(nextSnapshot);
@@ -854,11 +858,7 @@ function App() {
   const [popChoiceViewId, setPopChoiceViewId] =
     useState<PopChoiceViewId>(initialPopChoiceView);
   const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
-  const editorSession = useEditorSession(
-    showPopChoiceVisualization
-      ? activePopChoiceView.visualization
-      : fallbackVisualization,
-  );
+  const editorSession = useEditorSession(initialVisualization);
   const selectPopChoiceView = (viewId: PopChoiceViewId): void => {
     const nextView = POPCHOICE_VIEWS[viewId];
     const nextSearchParameters = new URLSearchParams(window.location.search);
