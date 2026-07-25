@@ -30,8 +30,9 @@ Expected images live beside the browser tests under
 expected, and diff artifacts before accepting a change. If the visual change is
 intentional, update snapshots in the same pinned Linux image used by CI. The
 anonymous volume prevents Linux dependencies from replacing the host's
-`node_modules`, while the bind mount writes only the reviewed snapshots back to
-the current checkout:
+`node_modules`, while the bind mount writes the reviewed snapshots back to the
+current checkout. Playwright may also write gitignored `playwright-report/` and
+`test-results/` diagnostics:
 
 ```sh
 docker run --rm --ipc=host \
