@@ -20,10 +20,22 @@ export interface AssetLoad {
   readonly resolvedAsset: Promise<ResolvedAsset>;
 }
 
+export interface AssetSessionMetrics {
+  readonly cachedAssetCount: number;
+  readonly nodeInstanceCount: number;
+  readonly parsedAssetCount: number;
+}
+
 export interface AssetSession {
   complete(asset: Object3D): void;
   disposalRoots(): readonly Object3D[];
+  getMetrics(): AssetSessionMetrics;
   load(node: Node): AssetLoad;
+}
+
+interface AssetSessionCounters {
+  nodeInstanceCount: number;
+  parsedAssetCount: number;
 }
 
 interface CreateAssetSessionOptions {
@@ -92,6 +104,7 @@ async function parseResolvedAsset(
   resolvedAssetPromise: Promise<ResolvedAsset>,
   options: CreateAssetSessionOptions,
   cachedAssetRoots: Set<Object3D>,
+  counters: AssetSessionCounters,
 ): Promise<PreparedNodeAsset | null> {
   const resolvedAsset = await resolvedAssetPromise;
 
@@ -100,6 +113,7 @@ async function parseResolvedAsset(
   }
 
   const asset = await options.parseAsset(resolvedAsset.bytes);
+  counters.parsedAssetCount += 1;
 
   if (options.isDisposed()) {
     disposeObjectResources(asset);
@@ -114,6 +128,7 @@ function instantiateAsset(
   loadedAsset: PreparedNodeAsset | null,
   options: CreateAssetSessionOptions,
   pendingAssets: Set<Object3D>,
+  counters: AssetSessionCounters,
 ): PreparedNodeAsset | null {
   if (loadedAsset === null || options.isDisposed()) {
     return null;
@@ -121,6 +136,7 @@ function instantiateAsset(
 
   const asset = clone(loadedAsset.asset);
   pendingAssets.add(asset);
+  counters.nodeInstanceCount += 1;
   return { asset, resolvedAsset: loadedAsset.resolvedAsset };
 }
 
@@ -129,6 +145,7 @@ function createAssetLoad(
   options: CreateAssetSessionOptions,
   cachedAssetRoots: Set<Object3D>,
   pendingAssets: Set<Object3D>,
+  counters: AssetSessionCounters,
 ): AssetLoad {
   const resolvedAsset = resolveNodeAsset(node, options.resolveAsset);
   let parsedAsset: Promise<PreparedNodeAsset | null> | undefined;
@@ -139,8 +156,14 @@ function createAssetLoad(
         resolvedAsset,
         options,
         cachedAssetRoots,
+        counters,
       );
-      return instantiateAsset(await parsedAsset, options, pendingAssets);
+      return instantiateAsset(
+        await parsedAsset,
+        options,
+        pendingAssets,
+        counters,
+      );
     },
     resolvedAsset,
   };
@@ -174,6 +197,10 @@ export function createAssetSession(
   const assetLoads = new Map<string, AssetLoad>();
   const cachedAssetRoots = new Set<Object3D>();
   const pendingAssets = new Set<Object3D>();
+  const counters: AssetSessionCounters = {
+    nodeInstanceCount: 0,
+    parsedAssetCount: 0,
+  };
 
   return {
     complete(asset: Object3D): void {
@@ -181,6 +208,12 @@ export function createAssetSession(
     },
     disposalRoots(): readonly Object3D[] {
       return [...cachedAssetRoots, ...pendingAssets];
+    },
+    getMetrics(): AssetSessionMetrics {
+      return {
+        cachedAssetCount: cachedAssetRoots.size,
+        ...counters,
+      };
     },
     load(node: Node): AssetLoad {
       let assetLoad = assetLoads.get(node.assetId);
@@ -191,6 +224,7 @@ export function createAssetSession(
           options,
           cachedAssetRoots,
           pendingAssets,
+          counters,
         );
         assetLoads.set(node.assetId, assetLoad);
       }

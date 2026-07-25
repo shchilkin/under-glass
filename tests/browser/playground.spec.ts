@@ -103,7 +103,7 @@ test("renders multiple Nodes while resolving a repeated Asset ID once", async ({
   );
 });
 
-test("renders the deterministic 200-Node stress fixture with one Asset resolve", async ({
+test("renders the 200-Node fixture with one resolved, parsed, cached Asset", async ({
   page,
 }) => {
   await page.goto("/?scenario=stress");
@@ -118,6 +118,9 @@ test("renders the deterministic 200-Node stress fixture with one Asset resolve",
   await expect(page.getByTestId("connection-count")).toHaveText("0");
   await expect(page.getByTestId("group-count")).toHaveText("0");
   await expect(page.getByTestId("asset-resolve-count")).toHaveText("1");
+  await expect(page.getByTestId("asset-parse-count")).toHaveText("1");
+  await expect(page.getByTestId("asset-cache-count")).toHaveText("1");
+  await expect(page.getByTestId("node-instance-count")).toHaveText("200");
   await expect(page.getByLabel("Renderer diagnostics")).toHaveCount(0);
   await expect(page.locator("[data-under-glass-semantic-node]")).toHaveCount(
     200,

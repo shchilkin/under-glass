@@ -325,13 +325,17 @@ What changed:
   deterministic Ground Plane grid.
 - Every stress Node references the same checked-in `service-asset`, while the
   fixture intentionally contains no Groups or Connections.
-- The stress presentation exposes Node, Connection, Group, Asset resolve, and
-  lifecycle counts through the same playground metrics as other scenarios.
+- The stress presentation exposes Node, Connection, Group, Asset resolve,
+  Asset parse, Node instance, and lifecycle counts through the same playground
+  metrics as other scenarios.
 
 What worked:
 
 - The browser reaches `ready` with all 200 Nodes and the complete semantic
-  mirror while resolving the repeated Asset ID once.
+  mirror while resolving and parsing the repeated Asset ID once.
+- Renderer-owned resource metrics distinguish one cached parsed Asset from 200
+  scene Node instances; this makes reuse observable without inspecting test
+  spies or host implementation details.
 - A separate URL keeps the fixture reproducible without adding stress-only
   controls or state to the canonical Editor.
 - Fixed source data and repository-owned GLB bytes keep the result independent
@@ -341,8 +345,9 @@ What this does not claim:
 
 - v0.1 sets no frame-rate target and does not treat one local render as a
   benchmark.
-- Resource-growth and repeated mount/disposal gates belong to the next
-  stability slice rather than this fixture-definition slice.
+- Resource counts for one completed lifecycle are in scope here. Growth and
+  disposal across repeated mount/unmount cycles remain the next stability
+  slice.
 - Connections are excluded so this fixture measures repeated Node and Asset
   behavior instead of pre-empting the v0.2 routing scope.
 

@@ -279,6 +279,11 @@ function loadingSnapshot(visualization: Visualization): EditorSnapshot {
     diagnostics: [],
     dragPreview: null,
     gridStep: 1,
+    resourceMetrics: {
+      cachedAssetCount: 0,
+      nodeInstanceCount: 0,
+      parsedAssetCount: 0,
+    },
     selectedNodeId: null,
     status: "loading",
     visualization,
@@ -468,6 +473,7 @@ function SceneControls({
 
 interface SceneMetricsProps {
   readonly assetResolveCount: number;
+  readonly resourceMetrics: ViewerSnapshot["resourceMetrics"];
   readonly subjectLabel: string;
   readonly subjectValue: string | undefined;
   readonly statusHistory: readonly SceneRendererStatus[];
@@ -476,6 +482,7 @@ interface SceneMetricsProps {
 
 function SceneMetrics({
   assetResolveCount,
+  resourceMetrics,
   subjectLabel,
   subjectValue,
   statusHistory,
@@ -510,6 +517,24 @@ function SceneMetrics({
       <div>
         <dt>Asset resolves</dt>
         <dd data-testid="asset-resolve-count">{assetResolveCount}</dd>
+      </div>
+      <div>
+        <dt>Asset parses</dt>
+        <dd data-testid="asset-parse-count">
+          {resourceMetrics.parsedAssetCount}
+        </dd>
+      </div>
+      <div>
+        <dt>Cached assets</dt>
+        <dd data-testid="asset-cache-count">
+          {resourceMetrics.cachedAssetCount}
+        </dd>
+      </div>
+      <div>
+        <dt>Node instances</dt>
+        <dd data-testid="node-instance-count">
+          {resourceMetrics.nodeInstanceCount}
+        </dd>
       </div>
       <div>
         <dt>Lifecycle</dt>
@@ -847,6 +872,7 @@ function App() {
       <aside className="scene-meta">
         <SceneMetrics
           assetResolveCount={assetResolveCount}
+          resourceMetrics={snapshot.resourceMetrics}
           statusHistory={statusHistory}
           subjectLabel={metricSubject.label}
           subjectValue={metricSubject.value}

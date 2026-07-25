@@ -23,8 +23,15 @@ export interface SceneRendererDiagnostic {
   readonly severity: DiagnosticSeverity;
 }
 
+export interface SceneRendererResourceMetrics {
+  readonly cachedAssetCount: number;
+  readonly nodeInstanceCount: number;
+  readonly parsedAssetCount: number;
+}
+
 export interface SceneRendererSnapshot {
   readonly diagnostics: readonly SceneRendererDiagnostic[];
+  readonly resourceMetrics: SceneRendererResourceMetrics;
   readonly status: SceneRendererStatus;
 }
 

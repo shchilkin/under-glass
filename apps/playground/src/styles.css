@@ -386,7 +386,7 @@ h1 {
 }
 
 .app--graph dl {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
   border: 1px solid rgb(233 239 235 / 8%);

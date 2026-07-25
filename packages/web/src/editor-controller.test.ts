@@ -71,6 +71,11 @@ function createHarness(): {
   const rendererListeners = new Set<() => void>();
   let snapshot = {
     diagnostics: [],
+    resourceMetrics: {
+      cachedAssetCount: 0,
+      nodeInstanceCount: 0,
+      parsedAssetCount: 0,
+    },
     status: "ready",
   } as const;
   const renderer: SceneRenderer = {

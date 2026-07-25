@@ -46,5 +46,32 @@ describe("Asset Session", () => {
     expect(resolveAsset).toHaveBeenCalledTimes(1);
     expect(parseAsset).toHaveBeenCalledTimes(1);
     expect(first?.asset).not.toBe(second?.asset);
+    expect(session.getMetrics()).toEqual({
+      cachedAssetCount: 1,
+      nodeInstanceCount: 2,
+      parsedAssetCount: 1,
+    });
+  });
+
+  it("does not count a failed parse as a parsed or cached Asset", async () => {
+    const session = createAssetSession({
+      isDisposed: () => false,
+      parseAsset: async () => {
+        throw new Error("Malformed GLB");
+      },
+      resolveAsset: async () => ({
+        bytes: new ArrayBuffer(0),
+        definition,
+      }),
+    });
+
+    await expect(session.load(node("malformed")).instantiate()).rejects.toThrow(
+      "Malformed GLB",
+    );
+    expect(session.getMetrics()).toEqual({
+      cachedAssetCount: 0,
+      nodeInstanceCount: 0,
+      parsedAssetCount: 0,
+    });
   });
 });

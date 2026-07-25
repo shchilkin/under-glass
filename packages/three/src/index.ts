@@ -8,6 +8,7 @@ export {
   type SceneRenderer,
   type SceneRendererDiagnostic,
   type SceneRendererDiagnosticCode,
+  type SceneRendererResourceMetrics,
   type SceneRendererSnapshot,
   type SceneRendererStatus,
   type SceneNodeInteraction,
