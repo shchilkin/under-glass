@@ -411,6 +411,7 @@ export function createEditorControllerWithFactories(
       semanticLayer = null;
       selectedNodeId = null;
       clearDragState();
+      history.clear();
       listeners.clear();
     },
     getSnapshot(): EditorSnapshot {

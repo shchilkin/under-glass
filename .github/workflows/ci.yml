@@ -62,7 +62,6 @@ jobs:
 
   browser:
     name: browser
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     container:
@@ -82,7 +81,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run browser smoke test
+      - name: Run browser and visual stability gates
         run: npm run test:browser
 
       - name: Upload failure diagnostics

@@ -34,7 +34,10 @@ import "./styles.css";
 const searchParameters = new URLSearchParams(window.location.search);
 const showConnection = searchParameters.has("connections");
 const scenario = searchParameters.get("scenario") ?? "graph";
-const showPopChoiceVisualization = scenario === "graph" && !showConnection;
+const lifecycleEnabled =
+  scenario === "lifecycle" || searchParameters.get("lifecycle") === "1";
+const showPopChoiceVisualization =
+  (scenario === "graph" || scenario === "lifecycle") && !showConnection;
 const CAMERA_MOTIONS: readonly CameraMotion[] = ["responsive", "spring"];
 const requestedCameraMotion = searchParameters.get("motion");
 const requestedPopChoiceView = searchParameters.get("view");
@@ -271,6 +274,9 @@ function createDemoVisualization(): Visualization {
 
 const fallbackVisualization =
   scenario === "stress" ? stressVisualization : createDemoVisualization();
+const initialVisualization = showPopChoiceVisualization
+  ? POPCHOICE_VIEWS[initialPopChoiceView].visualization
+  : fallbackVisualization;
 
 function loadingSnapshot(visualization: Visualization): EditorSnapshot {
   return {
@@ -707,27 +713,40 @@ function PlaygroundTitle({ presentation }: PlaygroundTitleProps) {
   );
 }
 
-function App() {
+interface LifecycleControlsProps {
+  readonly generation: number;
+  readonly onRemount: () => void;
+}
+
+function LifecycleControls({ generation, onRemount }: LifecycleControlsProps) {
+  return (
+    <div aria-label="Lifecycle test controls" className="lifecycle-controls">
+      <span>
+        Session <strong data-testid="session-generation">{generation}</strong>
+      </span>
+      <button onClick={onRemount} type="button">
+        Remount Editor Session
+      </button>
+    </div>
+  );
+}
+
+function useEditorSession(initialVisualization: Visualization) {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<EditorController | null>(null);
-  const [popChoiceViewId, setPopChoiceViewId] =
-    useState<PopChoiceViewId>(initialPopChoiceView);
-  const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
-  const [visualization, setVisualization] = useState<Visualization>(() =>
-    showPopChoiceVisualization
-      ? activePopChoiceView.visualization
-      : fallbackVisualization,
-  );
+  const [visualization, setVisualization] =
+    useState<Visualization>(initialVisualization);
   const [snapshot, setSnapshot] = useState<EditorSnapshot>(() =>
-    loadingSnapshot(visualization),
+    loadingSnapshot(initialVisualization),
   );
   const [cameraMode, setCameraMode] = useState<OpeningView["cameraMode"]>(
-    visualization.openingView.cameraMode,
+    initialVisualization.openingView.cameraMode,
   );
   const [cameraMotion, setCameraMotion] =
     useState<CameraMotion>(initialCameraMotion);
   const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([]);
   const [assetResolveCount, setAssetResolveCount] = useState(0);
+  const [sessionGeneration, setSessionGeneration] = useState(0);
 
   useEffect(() => {
     const container = sceneContainerRef.current;
@@ -755,6 +774,7 @@ function App() {
       visualization,
     });
     controllerRef.current = controller;
+    controller.setCameraMode(cameraMode, { transition: "immediate" });
     const updateSnapshot = () => {
       const nextSnapshot = controller.getSnapshot();
       setSnapshot(nextSnapshot);
@@ -769,7 +789,7 @@ function App() {
       unsubscribe();
       controller.dispose();
     };
-  }, []);
+  }, [sessionGeneration]);
 
   useEffect(() => {
     const controller = controllerRef.current;
@@ -795,7 +815,7 @@ function App() {
     controllerRef.current?.setCameraMotion(cameraMotion);
   }, [cameraMotion]);
 
-  const selectCameraMotion = (motion: CameraMotion): void => {
+  const updateCameraMotion = (motion: CameraMotion): void => {
     const nextSearchParameters = new URLSearchParams(window.location.search);
 
     nextSearchParameters.set("motion", motion);
@@ -806,6 +826,39 @@ function App() {
     );
     setCameraMotion(motion);
   };
+
+  return {
+    assetResolveCount,
+    cameraMode,
+    cameraMotion,
+    redo: (): void => {
+      controllerRef.current?.redo();
+    },
+    remount: (): void => {
+      setSessionGeneration((generation) => generation + 1);
+    },
+    sceneContainerRef,
+    sessionGeneration,
+    setCameraMode,
+    setGridStep: (gridStep: number | null): void => {
+      controllerRef.current?.setGridStep(gridStep);
+    },
+    setVisualization,
+    snapshot,
+    statusHistory,
+    undo: (): void => {
+      controllerRef.current?.undo();
+    },
+    updateCameraMotion,
+    visualization,
+  };
+}
+
+function App() {
+  const [popChoiceViewId, setPopChoiceViewId] =
+    useState<PopChoiceViewId>(initialPopChoiceView);
+  const activePopChoiceView = POPCHOICE_VIEWS[popChoiceViewId];
+  const editorSession = useEditorSession(initialVisualization);
   const selectPopChoiceView = (viewId: PopChoiceViewId): void => {
     const nextView = POPCHOICE_VIEWS[viewId];
     const nextSearchParameters = new URLSearchParams(window.location.search);
@@ -816,9 +869,9 @@ function App() {
       "",
       `${window.location.pathname}?${nextSearchParameters.toString()}${window.location.hash}`,
     );
-    setCameraMode(nextView.visualization.openingView.cameraMode);
+    editorSession.setCameraMode(nextView.visualization.openingView.cameraMode);
     setPopChoiceViewId(viewId);
-    setVisualization(nextView.visualization);
+    editorSession.setVisualization(nextView.visualization);
   };
   const presentation = presentationForScenario(
     showPopChoiceVisualization,
@@ -828,7 +881,7 @@ function App() {
   const metricSubject = sceneMetricSubject(
     showPopChoiceVisualization,
     activePopChoiceView.label,
-    visualization,
+    editorSession.visualization,
   );
 
   return (
@@ -836,13 +889,19 @@ function App() {
       <header className="app-header">
         <PlaygroundTitle presentation={presentation} />
         <SceneControls
-          cameraMode={cameraMode}
-          cameraMotion={cameraMotion}
-          onCameraModeChange={setCameraMode}
-          onCameraMotionChange={selectCameraMotion}
+          cameraMode={editorSession.cameraMode}
+          cameraMotion={editorSession.cameraMotion}
+          onCameraModeChange={editorSession.setCameraMode}
+          onCameraMotionChange={editorSession.updateCameraMotion}
         />
       </header>
       <div className="scene-stage">
+        {lifecycleEnabled ? (
+          <LifecycleControls
+            generation={editorSession.sessionGeneration}
+            onRemount={editorSession.remount}
+          />
+        ) : null}
         {showPopChoiceVisualization ? (
           <ArchitectureViewSwitch
             activeViewId={popChoiceViewId}
@@ -852,34 +911,28 @@ function App() {
         <div
           aria-label="Under Glass 3D scene"
           className="scene"
-          ref={sceneContainerRef}
+          ref={editorSession.sceneContainerRef}
         />
         {showPopChoiceVisualization ? (
           <EditorControls
-            onGridStepChange={(gridStep) =>
-              controllerRef.current?.setGridStep(gridStep)
-            }
-            onRedo={() => {
-              controllerRef.current?.redo();
-            }}
-            onUndo={() => {
-              controllerRef.current?.undo();
-            }}
-            snapshot={snapshot}
+            onGridStepChange={editorSession.setGridStep}
+            onRedo={editorSession.redo}
+            onUndo={editorSession.undo}
+            snapshot={editorSession.snapshot}
           />
         ) : null}
       </div>
       <aside className="scene-meta">
         <SceneMetrics
-          assetResolveCount={assetResolveCount}
-          resourceMetrics={snapshot.resourceMetrics}
-          statusHistory={statusHistory}
+          assetResolveCount={editorSession.assetResolveCount}
+          resourceMetrics={editorSession.snapshot.resourceMetrics}
+          statusHistory={editorSession.statusHistory}
           subjectLabel={metricSubject.label}
           subjectValue={metricSubject.value}
-          visualization={visualization}
+          visualization={editorSession.visualization}
         />
       </aside>
-      <RendererDiagnostics diagnostics={snapshot.diagnostics} />
+      <RendererDiagnostics diagnostics={editorSession.snapshot.diagnostics} />
     </main>
   );
 }

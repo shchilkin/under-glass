@@ -23,7 +23,13 @@ Under Glass requires Node.js 24 or newer and npm 11.
 npm install
 npm run dev
 npm run check
+npm run test:browser
 ```
+
+The browser suite includes pinned Chromium visual baselines and repeated
+renderer and Editor Session lifecycle gates. See
+[`docs/testing/stability-gates.md`](./docs/testing/stability-gates.md) before
+updating an intentional visual change.
 
 ## Camera motion
 

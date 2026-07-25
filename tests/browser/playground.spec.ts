@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 interface SceneColorCounts {
   readonly asset: number;
@@ -7,6 +7,181 @@ interface SceneColorCounts {
 
 const RECOMMENDATION_ASSET_RESOLVE_COUNT = 6;
 const RECOMMENDATION_NODE_COUNT = 7;
+
+interface LifecycleProbeSnapshot {
+  readonly activeContextCount: number;
+  readonly activeListenerCount: number;
+  readonly activeListeners: readonly string[];
+  readonly contextLossCount: number;
+  readonly createdContextCount: number;
+}
+
+async function installLifecycleProbe(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const listenerRegistry = new Map<
+      EventTarget,
+      Map<string, Set<EventListenerOrEventListenerObject>>
+    >();
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    const originalRemoveEventListener =
+      EventTarget.prototype.removeEventListener;
+    const captureKey = (
+      type: string,
+      options?: boolean | AddEventListenerOptions,
+    ): string =>
+      `${type}:${String(
+        typeof options === "boolean" ? options : (options?.capture ?? false),
+      )}`;
+    const activeListenerCount = (): number => {
+      let count = 0;
+
+      for (const [target, targetListeners] of listenerRegistry) {
+        if (target instanceof Node && !target.isConnected) {
+          listenerRegistry.delete(target);
+          continue;
+        }
+
+        for (const listeners of targetListeners.values()) {
+          count += listeners.size;
+        }
+      }
+
+      return count;
+    };
+    const activeListeners = (): string[] => {
+      const details: string[] = [];
+
+      for (const [target, targetListeners] of listenerRegistry) {
+        if (target instanceof Node && !target.isConnected) {
+          continue;
+        }
+
+        for (const [key, listeners] of targetListeners) {
+          details.push(
+            `${target.constructor.name}:${key}:${String(listeners.size)}`,
+          );
+        }
+      }
+
+      return details.sort();
+    };
+
+    EventTarget.prototype.addEventListener = function (
+      type,
+      listener,
+      options,
+    ): void {
+      if (listener !== null) {
+        const targetListeners =
+          listenerRegistry.get(this) ??
+          new Map<string, Set<EventListenerOrEventListenerObject>>();
+        const key = captureKey(type, options);
+        const listeners =
+          targetListeners.get(key) ??
+          new Set<EventListenerOrEventListenerObject>();
+
+        listeners.add(listener);
+        targetListeners.set(key, listeners);
+        listenerRegistry.set(this, targetListeners);
+      }
+
+      originalAddEventListener.call(this, type, listener, options);
+    };
+    EventTarget.prototype.removeEventListener = function (
+      type,
+      listener,
+      options,
+    ): void {
+      if (listener !== null) {
+        const targetListeners = listenerRegistry.get(this);
+        const key = captureKey(type, options);
+        const listeners = targetListeners?.get(key);
+
+        listeners?.delete(listener);
+        if (listeners?.size === 0) {
+          targetListeners?.delete(key);
+        }
+        if (targetListeners?.size === 0) {
+          listenerRegistry.delete(this);
+        }
+      }
+
+      originalRemoveEventListener.call(this, type, listener, options);
+    };
+
+    const activeContexts = new Set<WebGL2RenderingContext>();
+    const seenContexts = new WeakSet<WebGL2RenderingContext>();
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    const probe = {
+      activeContextCount: (): number => activeContexts.size,
+      activeListenerCount,
+      activeListeners,
+      contextLossCount: 0,
+      createdContextCount: 0,
+    };
+
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      value(this: HTMLCanvasElement, ...args: unknown[]) {
+        const context = Reflect.apply(
+          originalGetContext,
+          this,
+          args,
+        ) as RenderingContext | null;
+
+        if (
+          context instanceof WebGL2RenderingContext &&
+          !seenContexts.has(context)
+        ) {
+          seenContexts.add(context);
+          activeContexts.add(context);
+          probe.createdContextCount += 1;
+          originalAddEventListener.call(
+            this,
+            "webglcontextlost",
+            () => {
+              if (context.isContextLost()) {
+                activeContexts.delete(context);
+                probe.contextLossCount += 1;
+              }
+            },
+            { once: true },
+          );
+        }
+
+        return context;
+      },
+    });
+    Object.defineProperty(window, "__underGlassLifecycleProbe", {
+      configurable: false,
+      value: probe,
+    });
+  });
+}
+
+async function readLifecycleProbe(page: Page): Promise<LifecycleProbeSnapshot> {
+  return page.evaluate(() => {
+    const probe = (
+      window as Window & {
+        readonly __underGlassLifecycleProbe: {
+          readonly activeContextCount: () => number;
+          readonly activeListenerCount: () => number;
+          readonly activeListeners: () => string[];
+          readonly contextLossCount: number;
+          readonly createdContextCount: number;
+        };
+      }
+    ).__underGlassLifecycleProbe;
+
+    return {
+      activeContextCount: probe.activeContextCount(),
+      activeListenerCount: probe.activeListenerCount(),
+      activeListeners: probe.activeListeners(),
+      contextLossCount: probe.contextLossCount,
+      createdContextCount: probe.createdContextCount,
+    };
+  });
+}
 
 async function sceneColorCounts(canvas: Locator): Promise<SceneColorCounts> {
   const screenshot = await canvas.screenshot();
@@ -128,6 +303,138 @@ test("renders the 200-Node fixture with one resolved, parsed, cached Asset", asy
   await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
     1,
   );
+});
+
+test("repeated Editor Session lifecycles release browser and renderer resources", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await installLifecycleProbe(page);
+  await page.goto("/?scenario=lifecycle");
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 8_000,
+  });
+
+  const remount = page.getByRole("button", {
+    name: "Remount Editor Session",
+  });
+
+  await expect(remount).toBeVisible();
+  await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+    1,
+  );
+
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
+    "data-under-glass-camera-mode",
+    "top",
+  );
+  await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
+  await remount.click();
+  await expect(page.getByTestId("session-generation")).toHaveText("1");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Under Glass 3D scene")).toHaveAttribute(
+    "data-under-glass-camera-mode",
+    "top",
+  );
+  await expect(
+    page.getByRole("button", { name: "Top", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const baseline = await readLifecycleProbe(page);
+
+  for (let cycle = 1; cycle <= 3; cycle += 1) {
+    const generation = cycle + 1;
+    await remount.click();
+    await expect(page.getByTestId("session-generation")).toHaveText(
+      String(generation),
+    );
+    await expect(
+      page.getByText("loading → ready", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+    await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+      1,
+    );
+    await expect(page.locator("[data-under-glass-labels]")).toHaveCount(1);
+    await expect(
+      page.locator("[data-under-glass-semantic-summary]"),
+    ).toHaveCount(1);
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).contextLossCount)
+      .toBe(baseline.contextLossCount + cycle);
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).activeListenerCount)
+      .toBe(baseline.activeListenerCount);
+  }
+
+  const finalProbe = await readLifecycleProbe(page);
+  expect(finalProbe.activeListeners).toEqual(baseline.activeListeners);
+  expect(finalProbe).toMatchObject({
+    activeContextCount: 1,
+    activeListenerCount: baseline.activeListenerCount,
+    contextLossCount: baseline.contextLossCount + 3,
+    createdContextCount: baseline.createdContextCount + 3,
+  });
+});
+
+test("repeated 200-Node lifecycles keep one parsed Asset and one active context", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await installLifecycleProbe(page);
+  await page.goto("/?scenario=stress&lifecycle=1");
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  const remount = page.getByRole("button", {
+    name: "Remount Editor Session",
+  });
+
+  await remount.click();
+  await expect(page.getByTestId("session-generation")).toHaveText("1");
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  const baseline = await readLifecycleProbe(page);
+
+  for (let cycle = 1; cycle <= 2; cycle += 1) {
+    const generation = cycle + 1;
+    await remount.click();
+    await expect(page.getByTestId("session-generation")).toHaveText(
+      String(generation),
+    );
+    await expect(
+      page.getByText("loading → ready", { exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("asset-parse-count")).toHaveText("1");
+    await expect(page.getByTestId("asset-cache-count")).toHaveText("1");
+    await expect(page.getByTestId("node-instance-count")).toHaveText("200");
+    await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+      1,
+    );
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).contextLossCount)
+      .toBe(baseline.contextLossCount + cycle);
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).activeListenerCount)
+      .toBe(baseline.activeListenerCount);
+  }
+
+  const finalProbe = await readLifecycleProbe(page);
+  expect(finalProbe.activeListeners).toEqual(baseline.activeListeners);
+  expect(finalProbe).toMatchObject({
+    activeContextCount: 1,
+    activeListenerCount: baseline.activeListenerCount,
+    contextLossCount: baseline.contextLossCount + 2,
+    createdContextCount: baseline.createdContextCount + 2,
+  });
 });
 
 test("replaces progressive Placeholders without waiting for slower Nodes", async ({
@@ -542,6 +849,117 @@ test("selects, moves, undoes, and redoes a Node in the editor loop", async ({
   );
 });
 
+test("supports the complete editor interaction loop in Top mode", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await expect(
+    page.getByText("loading → ready", { exact: true }),
+  ).toBeVisible();
+
+  const scene = page.getByLabel("Under Glass 3D scene");
+  const canvas = page.locator("canvas[data-under-glass-renderer]");
+  const webControl = page.locator(
+    '[data-under-glass-semantic-node-control="web"]',
+  );
+
+  await page.getByRole("button", { name: "Top", exact: true }).click();
+  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-camera-transition",
+    "idle",
+  );
+
+  await webControl.focus();
+  await page.keyboard.press("Enter");
+  await expect(webControl).toHaveAttribute("aria-pressed", "true");
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-selected-node-id",
+    "web",
+  );
+
+  const selectedPosition = page.getByTestId("selected-node-position");
+  const originalPosition = await selectedPosition.textContent();
+  const bounds = await canvas.boundingBox();
+
+  expect(bounds).not.toBeNull();
+  if (bounds === null) {
+    return;
+  }
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 373, bounds.y + 255, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "valid",
+  );
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(scene).not.toHaveAttribute(
+    "data-under-glass-placement-validity",
+    /.+/,
+  );
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 373, bounds.y + 255, { steps: 8 });
+  await canvas.dispatchEvent("pointercancel", {
+    bubbles: true,
+    pointerId: 1,
+  });
+  await page.mouse.up();
+  await expect(scene).not.toHaveAttribute(
+    "data-under-glass-placement-validity",
+    /.+/,
+  );
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 500, bounds.y + 198, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "invalid",
+  );
+  await page.mouse.up();
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
+  await page.mouse.move(bounds.x + 373, bounds.y + 198);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 373, bounds.y + 255, { steps: 8 });
+  await expect(scene).toHaveAttribute(
+    "data-under-glass-placement-validity",
+    "valid",
+  );
+  await page.mouse.up();
+
+  const movedPosition = await selectedPosition.textContent();
+  expect(movedPosition).not.toBe(originalPosition);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+
+  await page.keyboard.press("Control+z");
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeEnabled();
+
+  await page.keyboard.press("Control+Shift+z");
+  await expect(selectedPosition).toHaveText(movedPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+
+  await page.keyboard.press("Control+z");
+  await expect(selectedPosition).toHaveText(originalPosition ?? "");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+});
+
 test("declutters world-space labels in a compact viewport", async ({
   page,
 }) => {
@@ -591,41 +1009,112 @@ test("retargets an active Camera Mode Transition to the latest requested mode", 
     "idle",
   );
 
-  await top.click();
-  await expect(top).toHaveAttribute("aria-pressed", "true");
-  await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-transition",
-    "moving",
-  );
+  await expect(isometric).toBeVisible();
+  await expect(top).toBeVisible();
+  await page.evaluate(async () => {
+    const sceneElement = document.querySelector(
+      '[aria-label="Under Glass 3D scene"]',
+    );
+    const buttons = [...document.querySelectorAll("button")];
+    const isometricButton = buttons.find(
+      (button) => button.textContent?.trim() === "Isometric",
+    );
+    const topButton = buttons.find(
+      (button) => button.textContent?.trim() === "Top",
+    );
 
-  await page.setViewportSize({ width: 1000, height: 900 });
-  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
-    RECOMMENDATION_NODE_COUNT,
-  );
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-transition",
-    "moving",
-  );
+    if (
+      !(sceneElement instanceof HTMLElement) ||
+      !(isometricButton instanceof HTMLButtonElement) ||
+      !(topButton instanceof HTMLButtonElement)
+    ) {
+      throw new Error("Camera transition controls were not found.");
+    }
 
-  await page.waitForTimeout(120);
-  await isometric.click();
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-mode",
-    "isometric",
-  );
-  await expect(scene).toHaveAttribute(
-    "data-under-glass-camera-transition",
-    "moving",
-  );
+    const transitions: string[] = [];
+    const resizeTransitions: string[] = [];
+    let resolveMoving: (() => void) | undefined;
+    const moving = new Promise<void>((resolve) => {
+      resolveMoving = resolve;
+    });
+    const recordTransition = (): void => {
+      const transition = `${sceneElement.dataset.underGlassCameraMode}:${sceneElement.dataset.underGlassCameraTransition}`;
 
-  await page.waitForTimeout(40);
-  await top.click();
+      transitions.push(transition);
+      if (transition === "top:moving") {
+        resolveMoving?.();
+      }
+    };
+    const observer = new MutationObserver(recordTransition);
+
+    observer.observe(sceneElement, {
+      attributeFilter: [
+        "data-under-glass-camera-mode",
+        "data-under-glass-camera-transition",
+      ],
+      attributes: true,
+    });
+    Object.defineProperty(window, "__underGlassCameraTransitions", {
+      configurable: true,
+      value: transitions,
+    });
+    Object.defineProperty(window, "__underGlassResizeTransitions", {
+      configurable: true,
+      value: resizeTransitions,
+    });
+
+    topButton.click();
+    await moving;
+    const initialWidth = sceneElement.getBoundingClientRect().width;
+    const resized = new Promise<void>((resolve) => {
+      const resizeObserver = new ResizeObserver(() => {
+        if (
+          Math.abs(sceneElement.getBoundingClientRect().width - initialWidth) >
+          1
+        ) {
+          resizeTransitions.push(
+            `${sceneElement.dataset.underGlassCameraMode}:${sceneElement.dataset.underGlassCameraTransition}`,
+          );
+          resizeObserver.disconnect();
+          resolve();
+        }
+      });
+
+      resizeObserver.observe(sceneElement);
+    });
+
+    sceneElement.style.width = `${initialWidth - 160}px`;
+    await resized;
+    isometricButton.click();
+    window.setTimeout(() => {
+      topButton.click();
+    }, 0);
+  });
   await expect(scene).toHaveAttribute("data-under-glass-camera-mode", "top");
   await expect(scene).toHaveAttribute(
     "data-under-glass-camera-transition",
     "idle",
     { timeout: 2_000 },
+  );
+  const transitions = await page.evaluate(() => {
+    const instrumentedWindow = window as Window & {
+      readonly __underGlassCameraTransitions: readonly string[];
+      readonly __underGlassResizeTransitions: readonly string[];
+    };
+
+    return {
+      resizeTransitions: instrumentedWindow.__underGlassResizeTransitions,
+      transitions: instrumentedWindow.__underGlassCameraTransitions,
+    };
+  });
+
+  expect(
+    transitions.transitions.filter((transition) => transition === "top:moving"),
+  ).toHaveLength(2);
+  expect(transitions.transitions).toContain("isometric:moving");
+  expect(transitions.resizeTransitions).toEqual(["top:moving"]);
+  await expect(page.locator('[data-under-glass-label="node"]')).toHaveCount(
+    RECOMMENDATION_NODE_COUNT,
   );
 });
 

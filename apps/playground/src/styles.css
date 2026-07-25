@@ -279,6 +279,28 @@ h1 {
   padding: 0 4px 8px;
 }
 
+.lifecycle-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 4px 8px;
+  color: #75837c;
+  font-size: 0.7rem;
+}
+
+.lifecycle-controls button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgb(233 239 235 / 16%);
+  border-radius: 7px;
+  color: #b7eccf;
+  background: #17251f;
+  font: inherit;
+  cursor: pointer;
+}
+
 .view-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
