@@ -40,9 +40,7 @@ docker run --rm --ipc=host \
   --mount type=volume,target=/work/node_modules \
   --workdir /work \
   mcr.microsoft.com/playwright:v1.61.1-noble \
-  bash -lc 'npm ci && npm run test:visual:update'
-
-npm run test:visual
+  bash -lc 'npm ci && npm run test:visual:update && npm run test:visual'
 ```
 
 CI runs the complete browser suite in

@@ -7,20 +7,23 @@ describe("renderer resource disposal", () => {
   it("disposes shared GPU resources once across every renderer-owned root", () => {
     const geometry = new BoxGeometry();
     const texture = new Texture();
-    const material = new MeshStandardMaterial({ map: texture });
+    const firstMaterial = new MeshStandardMaterial({ map: texture });
+    const secondMaterial = new MeshStandardMaterial({ map: texture });
     const geometryDispose = vi.spyOn(geometry, "dispose");
     const textureDispose = vi.spyOn(texture, "dispose");
-    const materialDispose = vi.spyOn(material, "dispose");
+    const firstMaterialDispose = vi.spyOn(firstMaterial, "dispose");
+    const secondMaterialDispose = vi.spyOn(secondMaterial, "dispose");
     const firstRoot = new Group();
     const secondRoot = new Group();
 
-    firstRoot.add(new Mesh(geometry, material));
-    secondRoot.add(new Mesh(geometry, material));
+    firstRoot.add(new Mesh(geometry, firstMaterial));
+    secondRoot.add(new Mesh(geometry, secondMaterial));
 
     disposeObjectResourceRoots([firstRoot, secondRoot]);
 
     expect(geometryDispose).toHaveBeenCalledOnce();
-    expect(materialDispose).toHaveBeenCalledOnce();
+    expect(firstMaterialDispose).toHaveBeenCalledOnce();
+    expect(secondMaterialDispose).toHaveBeenCalledOnce();
     expect(textureDispose).toHaveBeenCalledOnce();
   });
 });
