@@ -28,6 +28,7 @@ import {
   POPCHOICE_VIEWS,
   type PopChoiceViewId,
 } from "./popchoice-visualization.js";
+import { stressVisualization } from "./stress-visualization.js";
 import "./styles.css";
 
 const searchParameters = new URLSearchParams(window.location.search);
@@ -268,7 +269,8 @@ function createDemoVisualization(): Visualization {
   });
 }
 
-const fallbackVisualization = createDemoVisualization();
+const fallbackVisualization =
+  scenario === "stress" ? stressVisualization : createDemoVisualization();
 
 function loadingSnapshot(visualization: Visualization): EditorSnapshot {
   return {
@@ -348,20 +350,34 @@ function appendStatus(
 
 function presentationForScenario(
   isPopChoiceVisualization: boolean,
+  isStressVisualization: boolean,
   popChoiceDescription: string,
 ): {
   readonly className: string;
   readonly lede: string;
+  readonly title: string;
 } {
-  return isPopChoiceVisualization
-    ? {
-        className: "app app--graph",
-        lede: popChoiceDescription,
-      }
-    : {
-        className: "app",
-        lede: "A host-resolved GLB crossing the public renderer boundary.",
-      };
+  if (isPopChoiceVisualization) {
+    return {
+      className: "app app--graph",
+      lede: popChoiceDescription,
+      title: "PopChoice architecture",
+    };
+  }
+
+  if (isStressVisualization) {
+    return {
+      className: "app",
+      lede: "200 Nodes · one repeated Asset ID · no Connections.",
+      title: "200-Node stress fixture",
+    };
+  }
+
+  return {
+    className: "app",
+    lede: "A host-resolved GLB crossing the public renderer boundary.",
+    title: "Under Glass",
+  };
 }
 
 interface ArchitectureViewSwitchProps {
@@ -654,19 +670,13 @@ function EditorControls(props: EditorControlsProps) {
 
 interface PlaygroundTitleProps {
   readonly presentation: ReturnType<typeof presentationForScenario>;
-  readonly showPopChoiceVisualization: boolean;
 }
 
-function PlaygroundTitle({
-  presentation,
-  showPopChoiceVisualization,
-}: PlaygroundTitleProps) {
+function PlaygroundTitle({ presentation }: PlaygroundTitleProps) {
   return (
     <div className="app-title">
       <p className="eyebrow">Under Glass</p>
-      <h1>
-        {showPopChoiceVisualization ? "PopChoice architecture" : "Under Glass"}
-      </h1>
+      <h1>{presentation.title}</h1>
       <p className="lede">{presentation.lede}</p>
     </div>
   );
@@ -787,6 +797,7 @@ function App() {
   };
   const presentation = presentationForScenario(
     showPopChoiceVisualization,
+    scenario === "stress",
     activePopChoiceView.description,
   );
   const metricSubject = sceneMetricSubject(
@@ -798,10 +809,7 @@ function App() {
   return (
     <main className={presentation.className}>
       <header className="app-header">
-        <PlaygroundTitle
-          presentation={presentation}
-          showPopChoiceVisualization={showPopChoiceVisualization}
-        />
+        <PlaygroundTitle presentation={presentation} />
         <SceneControls
           cameraMode={cameraMode}
           cameraMotion={cameraMotion}
