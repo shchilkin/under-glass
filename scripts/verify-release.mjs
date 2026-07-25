@@ -28,6 +28,12 @@ const internalPackages = new Set(
     .map(({ manifest }) => manifest.name)
     .filter((name) => name?.startsWith("@under-glass/")),
 );
+const dependencyFields = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+];
 
 for (const { path, manifest } of manifests) {
   verifyPackage(path, manifest);
@@ -52,27 +58,33 @@ async function readManifest(path) {
 }
 
 function verifyPackage(path, manifest) {
-  if (manifest.version !== releaseVersion) {
+  verifyVersion(path, manifest.version);
+  verifyInternalDependencies(path, manifest);
+}
+
+function verifyVersion(path, version) {
+  if (version !== releaseVersion) {
     fail(
-      `${path} uses version ${manifest.version ?? "none"}; expected ${releaseVersion}`,
+      `${path} uses version ${version ?? "none"}; expected ${releaseVersion}`,
     );
   }
+}
 
-  for (const dependencyField of [
-    "dependencies",
-    "devDependencies",
-    "peerDependencies",
-    "optionalDependencies",
-  ]) {
+function verifyInternalDependencies(path, manifest) {
+  for (const dependencyField of dependencyFields) {
     for (const [name, version] of Object.entries(
       manifest[dependencyField] ?? {},
     )) {
-      if (internalPackages.has(name) && version !== releaseVersion) {
-        fail(
-          `${path} declares ${name}@${version} in ${dependencyField}; expected ${releaseVersion}`,
-        );
-      }
+      verifyInternalDependency(path, dependencyField, name, version);
     }
+  }
+}
+
+function verifyInternalDependency(path, dependencyField, name, version) {
+  if (internalPackages.has(name) && version !== releaseVersion) {
+    fail(
+      `${path} declares ${name}@${version} in ${dependencyField}; expected ${releaseVersion}`,
+    );
   }
 }
 
