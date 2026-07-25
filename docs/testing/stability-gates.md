@@ -28,10 +28,20 @@ npm run test:browser
 Expected images live beside the browser tests under
 `tests/browser/__screenshots__`. A changed image fails CI. Review the actual,
 expected, and diff artifacts before accepting a change. If the visual change is
-intentional, update snapshots explicitly:
+intentional, update snapshots in the same pinned Linux image used by CI. The
+anonymous volume prevents Linux dependencies from replacing the host's
+`node_modules`, while the bind mount writes only the reviewed snapshots back to
+the current checkout:
 
 ```sh
-npm run test:visual:update
+docker run --rm --ipc=host \
+  --env CI=1 \
+  --mount type=bind,source="$PWD",target=/work \
+  --mount type=volume,target=/work/node_modules \
+  --workdir /work \
+  mcr.microsoft.com/playwright:v1.61.1-noble \
+  bash -lc 'npm ci && npm run test:visual:update'
+
 npm run test:visual
 ```
 
@@ -53,8 +63,8 @@ initialization, the browser gates verify after every measured remount that:
 
 - exactly one renderer canvas, label overlay, and semantic summary remain;
 - renderer and Editor listeners return to the initial live-target count;
-- the previous WebGL context is explicitly lost and exactly one context remains
-  active;
+- the previous WebGL context emits `webglcontextlost` and exactly one context
+  remains active;
 - Editor undo/redo state is empty for the new Session;
 - the stress fixture still reports one successful Asset parse, one cached
   Asset, and 200 Node instances.

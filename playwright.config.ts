@@ -7,8 +7,8 @@ export default defineConfig({
     toHaveScreenshot: {
       animations: "disabled",
       caret: "hide",
-      maxDiffPixelRatio: 0.01,
-      threshold: 0.25,
+      maxDiffPixelRatio: 0.0001,
+      threshold: 0.1,
     },
   },
   failOnFlakyTests: isCI,
@@ -35,13 +35,13 @@ export default defineConfig({
     {
       command:
         "npm run dev --workspace @under-glass/playground -- --host 127.0.0.1 --port 4185 --strictPort",
-      reuseExistingServer: !isCI,
+      reuseExistingServer: false,
       url: "http://127.0.0.1:4185",
     },
     {
       command:
         "npm run dev --workspace @under-glass/vanilla-example -- --host 127.0.0.1 --port 4186 --strictPort",
-      reuseExistingServer: !isCI,
+      reuseExistingServer: false,
       url: "http://127.0.0.1:4186",
     },
   ],

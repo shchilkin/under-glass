@@ -9,6 +9,7 @@ const RECOMMENDATION_ASSET_RESOLVE_COUNT = 6;
 const RECOMMENDATION_NODE_COUNT = 7;
 
 interface LifecycleProbeSnapshot {
+  readonly activeContextCount: number;
   readonly activeListenerCount: number;
   readonly activeListeners: readonly string[];
   readonly contextLossCount: number;
@@ -108,11 +109,11 @@ async function installLifecycleProbe(page: Page): Promise<void> {
       originalRemoveEventListener.call(this, type, listener, options);
     };
 
+    const activeContexts = new Set<WebGL2RenderingContext>();
     const seenContexts = new WeakSet<WebGL2RenderingContext>();
-    const patchedLossExtensions = new WeakSet<WEBGL_lose_context>();
     const originalGetContext = HTMLCanvasElement.prototype.getContext;
-    const originalGetExtension = WebGL2RenderingContext.prototype.getExtension;
     const probe = {
+      activeContextCount: (): number => activeContexts.size,
       activeListenerCount,
       activeListeners,
       contextLossCount: 0,
@@ -133,33 +134,22 @@ async function installLifecycleProbe(page: Page): Promise<void> {
           !seenContexts.has(context)
         ) {
           seenContexts.add(context);
+          activeContexts.add(context);
           probe.createdContextCount += 1;
+          originalAddEventListener.call(
+            this,
+            "webglcontextlost",
+            () => {
+              if (context.isContextLost()) {
+                activeContexts.delete(context);
+                probe.contextLossCount += 1;
+              }
+            },
+            { once: true },
+          );
         }
 
         return context;
-      },
-    });
-    Object.defineProperty(WebGL2RenderingContext.prototype, "getExtension", {
-      configurable: true,
-      value(this: WebGL2RenderingContext, name: string) {
-        const extension = originalGetExtension.call(this, name);
-
-        if (name === "WEBGL_lose_context" && extension !== null) {
-          const lossExtension = extension as WEBGL_lose_context;
-
-          if (!patchedLossExtensions.has(lossExtension)) {
-            patchedLossExtensions.add(lossExtension);
-            const originalLoseContext =
-              lossExtension.loseContext.bind(lossExtension);
-
-            lossExtension.loseContext = (): void => {
-              probe.contextLossCount += 1;
-              originalLoseContext();
-            };
-          }
-        }
-
-        return extension;
       },
     });
     Object.defineProperty(window, "__underGlassLifecycleProbe", {
@@ -174,6 +164,7 @@ async function readLifecycleProbe(page: Page): Promise<LifecycleProbeSnapshot> {
     const probe = (
       window as Window & {
         readonly __underGlassLifecycleProbe: {
+          readonly activeContextCount: () => number;
           readonly activeListenerCount: () => number;
           readonly activeListeners: () => string[];
           readonly contextLossCount: number;
@@ -183,6 +174,7 @@ async function readLifecycleProbe(page: Page): Promise<LifecycleProbeSnapshot> {
     ).__underGlassLifecycleProbe;
 
     return {
+      activeContextCount: probe.activeContextCount(),
       activeListenerCount: probe.activeListenerCount(),
       activeListeners: probe.activeListeners(),
       contextLossCount: probe.contextLossCount,
@@ -368,6 +360,7 @@ test("repeated Editor Session lifecycles release browser and renderer resources"
   const finalProbe = await readLifecycleProbe(page);
   expect(finalProbe.activeListeners).toEqual(baseline.activeListeners);
   expect(finalProbe).toMatchObject({
+    activeContextCount: 1,
     activeListenerCount: baseline.activeListenerCount,
     contextLossCount: baseline.contextLossCount + 3,
     createdContextCount: baseline.createdContextCount + 3,
@@ -421,6 +414,7 @@ test("repeated 200-Node lifecycles keep one parsed Asset and one active context"
   const finalProbe = await readLifecycleProbe(page);
   expect(finalProbe.activeListeners).toEqual(baseline.activeListeners);
   expect(finalProbe).toMatchObject({
+    activeContextCount: 1,
     activeListenerCount: baseline.activeListenerCount,
     contextLossCount: baseline.contextLossCount + 2,
     createdContextCount: baseline.createdContextCount + 2,
