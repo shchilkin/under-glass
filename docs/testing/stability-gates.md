@@ -84,6 +84,8 @@ current bundles are fully optimized.
 
 Fallow uses repository-wide gating in CI. Its explicit entry configuration
 accounts for build configuration files without hiding unused runtime source.
+The `@arethetypeswrong/cli` dependency is explicitly retained because it is
+invoked through the package-validation script rather than imported from source.
 No telemetry is required.
 
 Dependabot batches npm and GitHub Actions updates into at most one weekly pull

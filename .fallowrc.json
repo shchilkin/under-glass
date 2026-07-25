@@ -6,5 +6,6 @@
     "packages/starter-assets/tsdown.config.ts",
     "packages/three/tsdown.config.ts",
     "packages/web/tsdown.config.ts"
-  ]
+  ],
+  "ignoreDependencies": ["@arethetypeswrong/cli"]
 }
