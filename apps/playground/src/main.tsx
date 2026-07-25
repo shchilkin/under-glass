@@ -34,7 +34,10 @@ import "./styles.css";
 const searchParameters = new URLSearchParams(window.location.search);
 const showConnection = searchParameters.has("connections");
 const scenario = searchParameters.get("scenario") ?? "graph";
-const showPopChoiceVisualization = scenario === "graph" && !showConnection;
+const lifecycleEnabled =
+  scenario === "lifecycle" || searchParameters.get("lifecycle") === "1";
+const showPopChoiceVisualization =
+  (scenario === "graph" || scenario === "lifecycle") && !showConnection;
 const CAMERA_MOTIONS: readonly CameraMotion[] = ["responsive", "spring"];
 const requestedCameraMotion = searchParameters.get("motion");
 const requestedPopChoiceView = searchParameters.get("view");
@@ -707,6 +710,24 @@ function PlaygroundTitle({ presentation }: PlaygroundTitleProps) {
   );
 }
 
+interface LifecycleControlsProps {
+  readonly generation: number;
+  readonly onRemount: () => void;
+}
+
+function LifecycleControls({ generation, onRemount }: LifecycleControlsProps) {
+  return (
+    <div aria-label="Lifecycle test controls" className="lifecycle-controls">
+      <span>
+        Session <strong data-testid="session-generation">{generation}</strong>
+      </span>
+      <button onClick={onRemount} type="button">
+        Remount Editor Session
+      </button>
+    </div>
+  );
+}
+
 function App() {
   const sceneContainerRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<EditorController | null>(null);
@@ -728,6 +749,7 @@ function App() {
     useState<CameraMotion>(initialCameraMotion);
   const [statusHistory, setStatusHistory] = useState<SceneRendererStatus[]>([]);
   const [assetResolveCount, setAssetResolveCount] = useState(0);
+  const [sessionGeneration, setSessionGeneration] = useState(0);
 
   useEffect(() => {
     const container = sceneContainerRef.current;
@@ -769,7 +791,7 @@ function App() {
       unsubscribe();
       controller.dispose();
     };
-  }, []);
+  }, [sessionGeneration]);
 
   useEffect(() => {
     const controller = controllerRef.current;
@@ -843,6 +865,14 @@ function App() {
         />
       </header>
       <div className="scene-stage">
+        {lifecycleEnabled ? (
+          <LifecycleControls
+            generation={sessionGeneration}
+            onRemount={() => {
+              setSessionGeneration((generation) => generation + 1);
+            }}
+          />
+        ) : null}
         {showPopChoiceVisualization ? (
           <ArchitectureViewSwitch
             activeViewId={popChoiceViewId}

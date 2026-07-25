@@ -82,7 +82,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run browser smoke test
+      - name: Run browser and visual stability gates
         run: npm run test:browser
 
       - name: Upload failure diagnostics

@@ -290,11 +290,18 @@ describe("EditorController", () => {
       harness.semanticFactory,
     );
 
+    controller.selectNode("web");
+    expect(controller.previewNodeMove({ x: 1, z: 0 })?.valid).toBe(true);
+    expect(controller.commitNodeMove()).toBe(true);
+    expect(controller.getSnapshot().canUndo).toBe(true);
+
     controller.dispose();
     controller.selectNode("web");
 
     expect(removeContainerListener).toHaveBeenCalled();
     expect(removeDocumentListener).toHaveBeenCalled();
+    expect(controller.getSnapshot().canRedo).toBe(false);
+    expect(controller.getSnapshot().canUndo).toBe(false);
     expect(controller.getSnapshot().selectedNodeId).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 interface SceneColorCounts {
   readonly asset: number;
@@ -7,6 +7,168 @@ interface SceneColorCounts {
 
 const RECOMMENDATION_ASSET_RESOLVE_COUNT = 6;
 const RECOMMENDATION_NODE_COUNT = 7;
+
+interface LifecycleProbeSnapshot {
+  readonly activeListenerCount: number;
+  readonly contextLossCount: number;
+  readonly createdContextCount: number;
+}
+
+async function installLifecycleProbe(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const listenerRegistry = new Map<
+      EventTarget,
+      Map<string, Set<EventListenerOrEventListenerObject>>
+    >();
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    const originalRemoveEventListener =
+      EventTarget.prototype.removeEventListener;
+    const captureKey = (
+      type: string,
+      options?: boolean | AddEventListenerOptions,
+    ): string =>
+      `${type}:${String(
+        typeof options === "boolean" ? options : (options?.capture ?? false),
+      )}`;
+    const activeListenerCount = (): number => {
+      let count = 0;
+
+      for (const [target, targetListeners] of listenerRegistry) {
+        if (target instanceof Node && !target.isConnected) {
+          listenerRegistry.delete(target);
+          continue;
+        }
+
+        for (const listeners of targetListeners.values()) {
+          count += listeners.size;
+        }
+      }
+
+      return count;
+    };
+
+    EventTarget.prototype.addEventListener = function (
+      type,
+      listener,
+      options,
+    ): void {
+      if (listener !== null) {
+        const targetListeners =
+          listenerRegistry.get(this) ??
+          new Map<string, Set<EventListenerOrEventListenerObject>>();
+        const key = captureKey(type, options);
+        const listeners =
+          targetListeners.get(key) ??
+          new Set<EventListenerOrEventListenerObject>();
+
+        listeners.add(listener);
+        targetListeners.set(key, listeners);
+        listenerRegistry.set(this, targetListeners);
+      }
+
+      originalAddEventListener.call(this, type, listener, options);
+    };
+    EventTarget.prototype.removeEventListener = function (
+      type,
+      listener,
+      options,
+    ): void {
+      if (listener !== null) {
+        const targetListeners = listenerRegistry.get(this);
+        const key = captureKey(type, options);
+        const listeners = targetListeners?.get(key);
+
+        listeners?.delete(listener);
+        if (listeners?.size === 0) {
+          targetListeners?.delete(key);
+        }
+        if (targetListeners?.size === 0) {
+          listenerRegistry.delete(this);
+        }
+      }
+
+      originalRemoveEventListener.call(this, type, listener, options);
+    };
+
+    const seenContexts = new WeakSet<WebGL2RenderingContext>();
+    const patchedLossExtensions = new WeakSet<WEBGL_lose_context>();
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    const originalGetExtension = WebGL2RenderingContext.prototype.getExtension;
+    const probe = {
+      activeListenerCount,
+      contextLossCount: 0,
+      createdContextCount: 0,
+    };
+
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      value(this: HTMLCanvasElement, ...args: unknown[]) {
+        const context = Reflect.apply(
+          originalGetContext,
+          this,
+          args,
+        ) as RenderingContext | null;
+
+        if (
+          context instanceof WebGL2RenderingContext &&
+          !seenContexts.has(context)
+        ) {
+          seenContexts.add(context);
+          probe.createdContextCount += 1;
+        }
+
+        return context;
+      },
+    });
+    Object.defineProperty(WebGL2RenderingContext.prototype, "getExtension", {
+      configurable: true,
+      value(this: WebGL2RenderingContext, name: string) {
+        const extension = originalGetExtension.call(this, name);
+
+        if (name === "WEBGL_lose_context" && extension !== null) {
+          const lossExtension = extension as WEBGL_lose_context;
+
+          if (!patchedLossExtensions.has(lossExtension)) {
+            patchedLossExtensions.add(lossExtension);
+            const originalLoseContext =
+              lossExtension.loseContext.bind(lossExtension);
+
+            lossExtension.loseContext = (): void => {
+              probe.contextLossCount += 1;
+              originalLoseContext();
+            };
+          }
+        }
+
+        return extension;
+      },
+    });
+    Object.defineProperty(window, "__underGlassLifecycleProbe", {
+      configurable: false,
+      value: probe,
+    });
+  });
+}
+
+async function readLifecycleProbe(page: Page): Promise<LifecycleProbeSnapshot> {
+  return page.evaluate(() => {
+    const probe = (
+      window as Window & {
+        readonly __underGlassLifecycleProbe: {
+          readonly activeListenerCount: () => number;
+          readonly contextLossCount: number;
+          readonly createdContextCount: number;
+        };
+      }
+    ).__underGlassLifecycleProbe;
+
+    return {
+      activeListenerCount: probe.activeListenerCount(),
+      contextLossCount: probe.contextLossCount,
+      createdContextCount: probe.createdContextCount,
+    };
+  });
+}
 
 async function sceneColorCounts(canvas: Locator): Promise<SceneColorCounts> {
   const screenshot = await canvas.screenshot();
@@ -128,6 +290,102 @@ test("renders the 200-Node fixture with one resolved, parsed, cached Asset", asy
   await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
     1,
   );
+});
+
+test("repeated Editor Session lifecycles release browser and renderer resources", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await installLifecycleProbe(page);
+  await page.goto("/?scenario=lifecycle");
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 8_000,
+  });
+
+  const baseline = await readLifecycleProbe(page);
+  const remount = page.getByRole("button", {
+    name: "Remount Editor Session",
+  });
+
+  await expect(remount).toBeVisible();
+  await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+    1,
+  );
+
+  for (let generation = 1; generation <= 3; generation += 1) {
+    await remount.click();
+    await expect(page.getByTestId("session-generation")).toHaveText(
+      String(generation),
+    );
+    await expect(
+      page.getByText("loading → ready", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Redo" })).toBeDisabled();
+    await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+      1,
+    );
+    await expect(page.locator("[data-under-glass-labels]")).toHaveCount(1);
+    await expect(
+      page.locator("[data-under-glass-semantic-summary]"),
+    ).toHaveCount(1);
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).contextLossCount)
+      .toBe(generation);
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).activeListenerCount)
+      .toBe(baseline.activeListenerCount);
+  }
+
+  expect(await readLifecycleProbe(page)).toEqual({
+    activeListenerCount: baseline.activeListenerCount,
+    contextLossCount: 3,
+    createdContextCount: baseline.createdContextCount + 3,
+  });
+});
+
+test("repeated 200-Node lifecycles keep one parsed Asset and one active context", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await installLifecycleProbe(page);
+  await page.goto("/?scenario=stress&lifecycle=1");
+  await expect(page.getByText("loading → ready", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  const baseline = await readLifecycleProbe(page);
+  const remount = page.getByRole("button", {
+    name: "Remount Editor Session",
+  });
+
+  for (let generation = 1; generation <= 2; generation += 1) {
+    await remount.click();
+    await expect(page.getByTestId("session-generation")).toHaveText(
+      String(generation),
+    );
+    await expect(
+      page.getByText("loading → ready", { exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("asset-parse-count")).toHaveText("1");
+    await expect(page.getByTestId("asset-cache-count")).toHaveText("1");
+    await expect(page.getByTestId("node-instance-count")).toHaveText("200");
+    await expect(page.locator("canvas[data-under-glass-renderer]")).toHaveCount(
+      1,
+    );
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).contextLossCount)
+      .toBe(generation);
+    await expect
+      .poll(async () => (await readLifecycleProbe(page)).activeListenerCount)
+      .toBe(baseline.activeListenerCount);
+  }
+
+  expect(await readLifecycleProbe(page)).toEqual({
+    activeListenerCount: baseline.activeListenerCount,
+    contextLossCount: 2,
+    createdContextCount: baseline.createdContextCount + 2,
+  });
 });
 
 test("replaces progressive Placeholders without waiting for slower Nodes", async ({

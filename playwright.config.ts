@@ -3,11 +3,20 @@ import { defineConfig, devices } from "@playwright/test";
 const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
+  expect: {
+    toHaveScreenshot: {
+      animations: "disabled",
+      caret: "hide",
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.25,
+    },
+  },
   failOnFlakyTests: isCI,
   forbidOnly: isCI,
   fullyParallel: false,
   reporter: isCI ? [["line"], ["html", { open: "never" }]] : "list",
   retries: isCI ? 1 : 0,
+  snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{arg}{ext}",
   testDir: "./tests/browser",
   workers: isCI ? 1 : undefined,
   projects: [
