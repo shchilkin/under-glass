@@ -96,10 +96,12 @@ function derivePortPair(source: GroundBounds, target: GroundBounds): PortPair {
 function removeConsecutiveDuplicates(
   points: readonly GroundPoint[],
 ): GroundPoint[] {
-  return points.filter(
-    (point, index) =>
-      index === 0 || !groundPointsEqual(point, points[index - 1]!),
-  );
+  return points.filter((point, index) => {
+    const previousPoint = points[index - 1];
+    return (
+      previousPoint === undefined || !groundPointsEqual(point, previousPoint)
+    );
+  });
 }
 
 function routePoints(ports: PortPair): GroundPoint[] {

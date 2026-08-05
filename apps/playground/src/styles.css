@@ -95,6 +95,9 @@ h1 {
 .camera-mode,
 .motion-profile {
   display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
   border: 1px solid rgb(233 239 235 / 16%);
   border-radius: 9px;
   background: #0e1311;
@@ -244,6 +247,9 @@ h1 {
 
 .snap-options {
   display: flex;
+  min-width: 0;
+  padding: 0;
+  border: 0;
   margin-right: 6px;
 }
 
@@ -304,7 +310,10 @@ h1 {
 .view-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
   width: min(300px, 100%);
+  margin: 0;
+  padding: 0;
   border: 1px solid rgb(233 239 235 / 12%);
   border-radius: 8px;
   background: #0b100e;

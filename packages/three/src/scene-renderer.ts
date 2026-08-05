@@ -5,7 +5,7 @@ import {
   DirectionalLight,
   Group,
   HemisphereLight,
-  OrthographicCamera,
+  type OrthographicCamera,
   PCFShadowMap,
   Scene,
   SRGBColorSpace,

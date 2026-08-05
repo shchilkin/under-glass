@@ -1,12 +1,12 @@
 import {
   BufferAttribute,
-  CylinderGeometry,
+  type CylinderGeometry,
   LineBasicMaterial,
   LineLoop,
   LineSegments,
   Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
+  type MeshBasicMaterial,
+  type MeshStandardMaterial,
   type Object3D,
 } from "three";
 import { describe, expect, it } from "vitest";

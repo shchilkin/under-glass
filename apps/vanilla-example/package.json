@@ -1,6 +1,6 @@
 {
   "name": "@under-glass/vanilla-example",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,9 +9,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@under-glass/core": "0.0.0",
-    "@under-glass/test-fixtures": "0.0.0",
-    "@under-glass/web": "0.0.0"
+    "@under-glass/core": "0.1.0",
+    "@under-glass/test-fixtures": "0.1.0",
+    "@under-glass/web": "0.1.0"
   },
   "devDependencies": {
     "vite": "8.1.5"

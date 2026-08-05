@@ -1,11 +1,22 @@
-# v0.1 stability gates
+# v0.1 quality and stability gates
 
-The v0.1 release boundary is protected at three observable seams:
+The v0.1 release boundary is protected at these observable seams:
 
-1. Vitest exercises runtime-neutral domain rules and controller behavior.
-2. Playwright exercises the public Viewer and Editor in a real Chromium page.
-3. Pinned Chromium screenshots protect the accepted project-visualization
+1. Prettier and Biome keep formatting and lint diagnostics at zero.
+2. Vitest exercises runtime-neutral domain rules and controller behavior and
+   enforces a 50% coverage floor.
+3. `publint` and `@arethetypeswrong/cli` validate every public package boundary.
+4. Explicit JavaScript budgets reject unintended playground and vanilla
+   example bundle growth.
+5. Fallow rejects repository-wide dead code, dependency, cycle, duplication,
+   and complexity findings.
+6. Playwright exercises the public Viewer and Editor, scans the canonical and
+   WebGL fallback states with axe, and smoke-tests Chromium, Firefox, and
+   WebKit.
+7. Pinned Chromium screenshots protect the accepted project-visualization
    presentation.
+8. Dependency Review and CodeQL reject high-severity dependency changes and
+   scan JavaScript/TypeScript code.
 
 The complete suite is:
 
@@ -40,14 +51,46 @@ docker run --rm --ipc=host \
   --mount type=bind,source="$PWD",target=/work \
   --mount type=volume,target=/work/node_modules \
   --workdir /work \
-  mcr.microsoft.com/playwright:v1.61.1-noble \
+  mcr.microsoft.com/playwright:v1.61.1-noble@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48 \
   bash -lc 'npm ci && npm run test:visual:update && npm run test:visual'
 ```
 
 CI runs the complete browser suite in
-`mcr.microsoft.com/playwright:v1.61.1-noble`; that pinned Linux Chromium
-environment is the release gate. Failure artifacts are retained for seven
-days.
+the digest-pinned Playwright image above; the image already contains the exact
+Chromium, Firefox, and WebKit versions required by the pinned Playwright
+package. Chromium runs the complete interaction, accessibility, and visual
+suite. Firefox and WebKit run the public semantic-graph smoke gate. Failure
+artifacts are retained for seven days.
+
+## Static, coverage, and package evidence
+
+`npm run check` is the fast project gate. It checks formatting, lint with
+warnings treated as errors, the release contract, TypeScript, unit coverage,
+all workspace builds, and the package manifests and declarations.
+
+The initial coverage floor is deliberately broad rather than aspirational:
+statements, branches, functions, and lines must each remain at or above 50%.
+The floor prevents silent regression while renderer/controller integration
+coverage is expanded in later milestones.
+
+Every package intended for eventual publication is checked with strict
+`publint` rules and the ESM-only profile from `@arethetypeswrong/cli`. The
+repository root remains private and v0.1 does not publish packages.
+
+The built playground and vanilla example have explicit total JavaScript
+budgets of 1000 kB and 800 kB respectively. These budgets document the current
+Three.js baseline and fail on unintended growth; they do not claim that the
+current bundles are fully optimized.
+
+Fallow uses repository-wide gating in CI. Its explicit entry configuration
+accounts for build configuration files without hiding unused runtime source.
+The `@arethetypeswrong/cli` dependency is explicitly retained because it is
+invoked through the package-validation script rather than imported from source.
+No telemetry is required.
+
+Dependabot batches npm and GitHub Actions updates into at most one weekly pull
+request per ecosystem, keeping maintenance visible without producing a stream
+of individual updates.
 
 ## Lifecycle and resource evidence
 
@@ -89,7 +132,10 @@ clears its bounded Operation history.
 | Repeated Asset reuse | Asset Session unit tests and renderer resource metrics |
 | Deterministic 200-Node stability | Checked-in stress fixture and repeated lifecycle browser gate |
 | Intentional visual review | Five committed screenshot baselines |
-| Release-branch CI | `npm run check` and `npm run test:browser` in `.github/workflows/ci.yml` |
+| Static and package quality | Prettier, Biome, Fallow, coverage, bundle budgets, `publint`, and `@arethetypeswrong/cli` |
+| Accessible fallback and browser portability | axe scans plus Chromium/Firefox/WebKit browser gates |
+| Dependency and code security | Dependency Review, CodeQL, and grouped Dependabot updates |
+| Release-branch CI | Project, Fallow, browser, dependency, and CodeQL workflows |
 
 The suite intentionally sets no FPS threshold. It detects crashes, lifecycle
 growth, resource-count regressions, interaction breakage, and visible

@@ -1,4 +1,4 @@
-import { OrthographicCamera, Vector3 } from "three";
+import { Vector3, type OrthographicCamera } from "three";
 
 import type { BasicConnectionRoute, Visualization } from "@under-glass/core";
 
@@ -137,9 +137,19 @@ function projectLabel(
   const projectedCandidates = label.points.map((point) =>
     point.clone().project(camera),
   );
+  const [firstProjected, ...remainingProjected] = projectedCandidates;
+
+  if (firstProjected === undefined) {
+    return {
+      hidden: true,
+      label,
+      position: { x: 0, y: 0 },
+    };
+  }
+
   const projected =
     label.type === "group"
-      ? projectedCandidates.reduce((best, candidate) => {
+      ? remainingProjected.reduce((best, candidate) => {
           const bestY = (-best.y * 0.5 + 0.5) * height;
           const candidateY = (-candidate.y * 0.5 + 0.5) * height;
 
@@ -148,8 +158,8 @@ function projectLabel(
           }
 
           return candidateY < bestY ? candidate : best;
-        })
-      : projectedCandidates[0]!;
+        }, firstProjected)
+      : firstProjected;
   const x = (projected.x * 0.5 + 0.5) * width + label.offset.x;
   const y = (-projected.y * 0.5 + 0.5) * height + label.offset.y;
 

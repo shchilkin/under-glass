@@ -144,10 +144,11 @@ export function declutterWorldSpaceLabels(
   let hiddenCount = 0;
 
   for (const label of projected) {
+    const labelRectangle = label.rectangle;
     const overlaps =
-      label.rectangle === null ||
+      labelRectangle === null ||
       occupied.some((rectangle) =>
-        rectanglesOverlap(label.rectangle!, rectangle),
+        rectanglesOverlap(labelRectangle, rectangle),
       );
     const mayYield =
       label.role === "connection" || width < COMPACT_VIEWPORT_WIDTH;
@@ -158,8 +159,8 @@ export function declutterWorldSpaceLabels(
 
     if (hidden) {
       hiddenCount += 1;
-    } else if (label.rectangle !== null) {
-      occupied.push(label.rectangle);
+    } else if (labelRectangle !== null) {
+      occupied.push(labelRectangle);
     }
   }
 

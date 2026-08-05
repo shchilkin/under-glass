@@ -15,12 +15,18 @@
             Host JSON and a host-owned Asset Resolver mounted without React.
           </p>
         </div>
-        <div aria-label="Camera mode" class="camera-controls">
-          <button aria-pressed="true" data-camera-mode="isometric">
+        <fieldset aria-label="Camera mode" class="camera-controls">
+          <button
+            aria-pressed="true"
+            data-camera-mode="isometric"
+            type="button"
+          >
             Isometric
           </button>
-          <button aria-pressed="false" data-camera-mode="top">Top</button>
-        </div>
+          <button aria-pressed="false" data-camera-mode="top" type="button">
+            Top
+          </button>
+        </fieldset>
       </header>
       <section aria-label="Under Glass vanilla Viewer" id="viewer"></section>
       <footer>

@@ -1,6 +1,6 @@
 {
   "name": "@under-glass/web",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Framework-neutral browser integration for Under Glass.",
   "type": "module",
   "license": "MIT",
@@ -19,8 +19,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@under-glass/core": "0.0.0",
-    "@under-glass/three": "0.0.0"
+    "@under-glass/core": "0.1.0",
+    "@under-glass/three": "0.1.0"
   },
   "engines": {
     "node": ">=24"
