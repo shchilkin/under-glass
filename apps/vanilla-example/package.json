@@ -14,7 +14,7 @@
     "@under-glass/web": "0.1.0"
   },
   "devDependencies": {
-    "vite": "8.1.5"
+    "vite": "8.2.1"
   },
   "engines": {
     "node": ">=24"
